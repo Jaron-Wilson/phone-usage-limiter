@@ -42,6 +42,7 @@ class SettingsStore(private val context: Context) {
         val DEFAULT_TRAVEL = longPreferencesKey("default_travel_minutes")
         val COMMUTE_ENABLED = booleanPreferencesKey("commute_enabled")
         val DESTINATIONS = stringPreferencesKey("destinations")
+        val CALENDAR_PRIORITY = stringPreferencesKey("calendar_priority")
     }
 
     data class ActiveState(
@@ -134,6 +135,17 @@ class SettingsStore(private val context: Context) {
 
     val homeAddress: Flow<String> = context.dataStore.data.map { it[K.HOME_ADDRESS].orEmpty() }
     suspend fun setHomeAddress(v: String) = edit { it[K.HOME_ADDRESS] = v }
+
+    /**
+     * Calendar ids in the order they should win a tie. Anything unlisted sorts
+     * after everything listed.
+     */
+    val calendarPriority: Flow<List<Long>> = context.dataStore.data.map { p ->
+        p[K.CALENDAR_PRIORITY].orEmpty().split(",").mapNotNull { it.trim().toLongOrNull() }
+    }
+
+    suspend fun setCalendarPriority(ids: List<Long>) =
+        edit { it[K.CALENDAR_PRIORITY] = ids.joinToString(",") }
 
     /** Places worth one tap from the home screen. */
     val destinations: Flow<List<Destination>> = context.dataStore.data.map {

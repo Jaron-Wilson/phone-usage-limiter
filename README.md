@@ -100,16 +100,16 @@ Thursday 11 September
 alarm   6:30 tomorrow
 drive   Home · Work · School
 
-NOW
+● NOW
 Sprint planning
 until 11:00
 
- · all day  Quarter ends
- · 14:00    Design review
+ ● all day  Quarter ends
+ ● 14:00    Design review
 
 TOMORROW
- · 10:00    Standup
- · 13:00    Work            <- bold, because it matters
+ ● 10:00    Standup
+ ● 13:00    Work            <- bold, because it matters
 
 Phone
 Messages
@@ -120,6 +120,15 @@ Money       9
 
 everything else
 ```
+
+Each dot carries its calendar's own colour, the one you chose in Google
+Calendar, so school, work and family are told apart without reading a word.
+
+Two events starting at the same minute have to be printed in some order, and
+left to the provider that order is arbitrary. **Rules > Calendars on this
+phone** sets the preference that settles it, and decides which one the headline
+shows: put your timetable above your social calendar and a 10:00 lecture sits
+above a 10:00 tailgate.
 
 One tap on a place under **drive** starts directions to it. Google Maps keeps
 its own Home and Work and offers no way to read them, so these are yours, typed
@@ -591,6 +600,7 @@ apply/ModeApplier         turns a decision into actual phone behaviour
 notify/Classifier         what a notification is, and whether it gets through
 notify/NotificationGate   the listener service
 notify/DigestPublisher    batching and release
+schedule/AgendaOrder      the order a day is read in
 commute/Commute           when to leave, as arithmetic
 commute/Destinations      places worth one tap
 guard/GuardPolicy         whether an app may be opened, pure and well tested
@@ -679,5 +689,6 @@ hardest to debug on a phone:
 - **`CommuteTest`** - working backwards to the moment you have to leave.
 - **`DuplicateRowsTest`** - repairing a home screen that seeded itself twice.
 - **`DestinationsTest`** - storing places without mangling an address.
+- **`AgendaOrderTest`** - which of two events at the same minute comes first.
 
-90 tests, all passing.
+100 tests, all passing.

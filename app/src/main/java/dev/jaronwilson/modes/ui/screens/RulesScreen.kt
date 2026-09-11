@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
@@ -27,7 +29,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.NotifClass
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import dev.jaronwilson.modes.core.repo.SettingsStore
+import dev.jaronwilson.modes.schedule.AgendaOrder
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
 import dev.jaronwilson.modes.commute.CommuteScheduler
@@ -294,44 +305,97 @@ fun RulesScreen() {
                 Text(
                     "Only calendars switched on here have their events on the phone " +
                         "at all, which is what this app and every widget read. Google " +
-                        "Calendar no longer exposes this, so a calendar can look enabled " +
-                        "there and still be missing.",
+                        "Calendar no longer exposes this, so one can look enabled there " +
+                        "and still be missing.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Order decides which wins when two events start at the same minute, " +
+                        "and which one the headline shows. Dots match the colours you " +
+                        "gave them in Google Calendar.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+
                 var calTick by remember { mutableStateOf(0) }
-                val calendars by produceState(initialValue = emptyList<CalRow>(), calTick) {
+                val priority by AppGraph.repo.settings.calendarPriority
+                    .collectAsState(initial = emptyList())
+                val calendars by produceState(initialValue = emptyList<CalRow>(), calTick, priority) {
                     val src = AppGraph.scheduler.calendar
-                    value = src.calendars()
-                        .map { CalRow(it.id, it.name, it.account, it.syncEvents, src.eventCount(it.id)) }
-                        .sortedWith(compareByDescending<CalRow> { it.synced }.thenBy { it.name.lowercase() })
+                    val all = src.calendars()
+                        .map { CalRow(it.id, it.name, it.account, it.syncEvents, src.eventCount(it.id), it.color) }
+                    // Synced first, in your stated order, then the rest.
+                    val ranked = all.filter { it.synced }
+                        .sortedWith(
+                            compareBy({ AgendaOrder.rank(it.id, priority) }, { it.name.lowercase() })
+                        )
+                    value = ranked + all.filterNot { it.synced }.sortedBy { it.name.lowercase() }
                 }
+
+                fun move(row: CalRow, delta: Int) {
+                    val current = calendars.filter { it.synced }.map { it.id }.toMutableList()
+                    val from = current.indexOf(row.id)
+                    val to = from + delta
+                    if (from < 0 || to !in current.indices) return
+                    current.add(to, current.removeAt(from))
+                    scope.launch {
+                        AppGraph.repo.settings.setCalendarPriority(current)
+                        calTick++
+                    }
+                }
+
                 if (calendars.isEmpty()) {
                     Text(
                         "No calendars found. Grant calendar access, or see the Now tab.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+                val syncedIds = calendars.filter { it.synced }.map { it.id }
                 calendars.forEach { cal ->
-                    RowItem(
-                        title = cal.name,
-                        subtitle = buildString {
-                            append(cal.account)
-                            if (cal.synced) append(" · ${cal.events} events in the next fortnight")
-                        },
-                        trailing = {
-                            Switch(
-                                checked = cal.synced,
-                                onCheckedChange = { on ->
-                                    scope.launch {
-                                        AppGraph.scheduler.calendar.setSynced(cal.id, on)
-                                        calTick++
-                                        AppGraph.scheduler.reevaluate("calendar sync changed")
-                                    }
-                                }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (cal.color == 0) MaterialTheme.colorScheme.outline
+                                    else Color(cal.color).copy(alpha = 1f)
+                                )
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(cal.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                            Text(
+                                if (cal.synced) "${cal.events} events in the next fortnight"
+                                else "not on this phone",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    )
+                        if (cal.synced && syncedIds.size > 1) {
+                            TextButton(
+                                enabled = syncedIds.indexOf(cal.id) > 0,
+                                onClick = { move(cal, -1) }
+                            ) { Text("up") }
+                            TextButton(
+                                enabled = syncedIds.indexOf(cal.id) < syncedIds.lastIndex,
+                                onClick = { move(cal, 1) }
+                            ) { Text("down") }
+                        }
+                        Switch(
+                            checked = cal.synced,
+                            onCheckedChange = { on ->
+                                scope.launch {
+                                    AppGraph.scheduler.calendar.setSynced(cal.id, on)
+                                    calTick++
+                                    AppGraph.scheduler.reevaluate("calendar sync changed")
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
@@ -518,7 +582,9 @@ private data class CalRow(
     val name: String,
     val account: String,
     val synced: Boolean,
-    val events: Int
+    val events: Int,
+    /** ARGB from Google Calendar, so the dot here matches the dot there. */
+    val color: Int
 )
 
 @Composable

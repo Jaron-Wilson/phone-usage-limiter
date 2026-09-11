@@ -63,6 +63,7 @@ import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.notify.DigestPublisher
+import dev.jaronwilson.modes.schedule.AgendaOrder
 import dev.jaronwilson.modes.schedule.CalEvent
 import dev.jaronwilson.modes.ui.MainActivity
 import dev.jaronwilson.modes.ui.theme.ModesTheme
@@ -164,6 +165,8 @@ private fun Home() {
     // Refreshed on its own clock: the calendar changes far less often than the
     // minute does, and querying the provider is not free.
     val places by AppGraph.repo.settings.destinations.collectAsState(initial = emptyList())
+    val calendarPriority by AppGraph.repo.settings.calendarPriority
+        .collectAsState(initial = emptyList())
     val highlightPattern by AppGraph.repo.settings.agendaHighlight
         .collectAsState(initial = dev.jaronwilson.modes.core.repo.SettingsStore.DEFAULT_HIGHLIGHT)
     val highlight = remember(highlightPattern) {
@@ -178,8 +181,7 @@ private fun Home() {
             value = runCatching {
                 AppGraph.scheduler.calendar.events(now - 12 * 60 * 60_000L, endOfTomorrow)
                     .filter { it.end > now }
-                    .sortedBy { it.begin }
-                    .take(24)
+                    .take(60)
             }.getOrDefault(emptyList())
             delay(5 * 60_000L)
         }
@@ -255,7 +257,7 @@ private fun Home() {
 
             if (!showAll) {
                 Spacer(Modifier.height(24.dp))
-                Agenda(events, calendarState, highlight)
+                Agenda(events, calendarState, highlight, calendarPriority)
             }
 
             Spacer(Modifier.height(28.dp))
@@ -389,7 +391,12 @@ private enum class CalendarState { OK, NO_PERMISSION, NO_CALENDARS }
  * spans the whole day is worth seeing and is not what you are doing right now.
  */
 @Composable
-private fun Agenda(events: List<CalEvent>, state: CalendarState, highlight: Regex?) {
+private fun Agenda(
+    events: List<CalEvent>,
+    state: CalendarState,
+    highlight: Regex?,
+    priority: List<Long>
+) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val now = System.currentTimeMillis()
@@ -401,8 +408,11 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState, highlight: Rege
     val todayJulian = remember(events) {
         LocalDate.now().getLong(JulianFields.JULIAN_DAY).toInt()
     }
-    val today = events.filter { it.occursOn(todayJulian) }
-    val tomorrow = events.filter { it.occursOn(todayJulian + 1) && !it.occursOn(todayJulian) }
+    val today = AgendaOrder.sort(events.filter { it.occursOn(todayJulian) }, priority)
+    val tomorrow = AgendaOrder.sort(
+        events.filter { it.occursOn(todayJulian + 1) && !it.occursOn(todayJulian) },
+        priority
+    )
 
     val current = today.firstOrNull { !it.allDay && it.begin <= now && it.end > now }
     val upcomingToday = today.filter { it.begin > now || (it.allDay && it.end > now) }
@@ -411,7 +421,11 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState, highlight: Rege
     Column {
         when {
             current != null -> {
-                Text("NOW", fontSize = 11.sp, letterSpacing = 2.sp, color = Accent)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    EventDot(current.color, 6.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("NOW", fontSize = 11.sp, letterSpacing = 2.sp, color = Accent)
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     current.title,
@@ -428,7 +442,11 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState, highlight: Rege
             }
             upcomingToday.any { !it.allDay } -> {
                 val next = upcomingToday.first { !it.allDay }
-                Text("NEXT", fontSize = 11.sp, letterSpacing = 2.sp, color = InkDim)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    EventDot(next.color, 6.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("NEXT", fontSize = 11.sp, letterSpacing = 2.sp, color = InkDim)
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     next.title,
@@ -511,12 +529,7 @@ private fun EventList(
                     .clickable { onClick(event) }
             ) {
                 val marked = highlight?.containsMatchIn(event.title) == true
-                Box(
-                    Modifier
-                        .size(if (marked) 5.dp else 4.dp)
-                        .clip(CircleShape)
-                        .background(if (marked) Accent else InkFaint)
-                )
+                EventDot(event.color, if (marked) 6.dp else 5.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     if (event.allDay) "all day"
@@ -621,6 +634,20 @@ private fun HomeRowView(
             }
         }
     }
+}
+
+/**
+ * The calendar's own colour, as Google Calendar draws it.
+ *
+ * Falls back to the muted grey when a calendar has no colour set, which is
+ * better than a black dot on a black screen.
+ */
+@Composable
+private fun EventDot(argb: Int, size: androidx.compose.ui.unit.Dp) {
+    val colour = remember(argb) {
+        if (argb == 0) InkFaint else Color(argb).copy(alpha = 1f)
+    }
+    Box(Modifier.size(size).clip(CircleShape).background(colour))
 }
 
 @Composable

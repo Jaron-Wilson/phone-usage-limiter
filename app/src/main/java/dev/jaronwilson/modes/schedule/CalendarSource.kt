@@ -30,7 +30,12 @@ data class CalEvent(
     val startDay: Int = 0,
     val endDay: Int = 0,
     /** Free text, exactly as typed into the event. Often empty. */
-    val location: String = ""
+    val location: String = "",
+    /**
+     * ARGB, as Google Calendar draws it. An event may override its calendar's
+     * colour, so the event's own wins when it is set.
+     */
+    val color: Int = 0
 ) {
     /** Whether this instance appears on the given local day. */
     fun occursOn(julianDay: Int): Boolean =
@@ -43,7 +48,9 @@ data class CalendarInfo(
     val account: String,
     val accountType: String = "",
     val visible: Boolean = true,
-    val syncEvents: Boolean = true
+    val syncEvents: Boolean = true,
+    /** ARGB, matching the colour Google Calendar shows. */
+    val color: Int = 0
 )
 
 /** Thin read-only wrapper over the system calendar provider. */
@@ -62,7 +69,8 @@ class CalendarSource(private val context: Context) {
             CalendarContract.Calendars.ACCOUNT_NAME,
             CalendarContract.Calendars.ACCOUNT_TYPE,
             CalendarContract.Calendars.VISIBLE,
-            CalendarContract.Calendars.SYNC_EVENTS
+            CalendarContract.Calendars.SYNC_EVENTS,
+            CalendarContract.Calendars.CALENDAR_COLOR
         )
         return runCatching {
             context.contentResolver.query(
@@ -77,7 +85,8 @@ class CalendarSource(private val context: Context) {
                                 account = c.getString(2) ?: "",
                                 accountType = c.getString(3) ?: "",
                                 visible = c.getInt(4) == 1,
-                                syncEvents = c.getInt(5) == 1
+                                syncEvents = c.getInt(5) == 1,
+                                color = c.getInt(6)
                             )
                         )
                     }
@@ -138,7 +147,9 @@ class CalendarSource(private val context: Context) {
             CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
             CalendarContract.Instances.START_DAY,
             CalendarContract.Instances.END_DAY,
-            CalendarContract.Instances.EVENT_LOCATION
+            CalendarContract.Instances.EVENT_LOCATION,
+            CalendarContract.Instances.EVENT_COLOR,
+            CalendarContract.Instances.CALENDAR_COLOR
         )
         return runCatching {
             context.contentResolver.query(
@@ -162,7 +173,9 @@ class CalendarSource(private val context: Context) {
                                 busy = c.getInt(6) == CalendarContract.Events.AVAILABILITY_BUSY,
                                 startDay = c.getInt(10),
                                 endDay = c.getInt(11),
-                                location = c.getString(12).orEmpty()
+                                location = c.getString(12).orEmpty(),
+                                // An event can override its calendar's colour.
+                                color = c.getInt(13).takeIf { it != 0 } ?: c.getInt(14)
                             )
                         )
                     }
