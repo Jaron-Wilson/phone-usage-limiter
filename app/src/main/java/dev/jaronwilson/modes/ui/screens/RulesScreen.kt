@@ -376,14 +376,24 @@ fun RulesScreen() {
                             )
                         }
                         if (cal.synced && syncedIds.size > 1) {
+                            val atTop = syncedIds.firstOrNull() == cal.id
+                            TextButton(
+                                enabled = !atTop,
+                                onClick = {
+                                    // Straight to the front: nudging one calendar
+                                    // up past a dozen others is not an interaction.
+                                    scope.launch {
+                                        AppGraph.repo.settings.setCalendarPriority(
+                                            listOf(cal.id) + syncedIds.filterNot { it == cal.id }
+                                        )
+                                        calTick++
+                                    }
+                                }
+                            ) { Text(if (atTop) "top" else "to top") }
                             TextButton(
                                 enabled = syncedIds.indexOf(cal.id) > 0,
                                 onClick = { move(cal, -1) }
                             ) { Text("up") }
-                            TextButton(
-                                enabled = syncedIds.indexOf(cal.id) < syncedIds.lastIndex,
-                                onClick = { move(cal, 1) }
-                            ) { Text("down") }
                         }
                         Switch(
                             checked = cal.synced,

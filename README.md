@@ -125,10 +125,16 @@ Each dot carries its calendar's own colour, the one you chose in Google
 Calendar, so school, work and family are told apart without reading a word.
 
 Two events starting at the same minute have to be printed in some order, and
-left to the provider that order is arbitrary. **Rules > Calendars on this
-phone** sets the preference that settles it, and decides which one the headline
-shows: put your timetable above your social calendar and a 10:00 lecture sits
-above a 10:00 tailgate.
+left to the provider that order is arbitrary. Two settings decide it:
+
+1. **A marked title wins**, using the same pattern that draws it bold. A shift
+   called "Work" outranks anything else at that minute.
+2. **Then the calendar order** from **Rules > Calendars on this phone**, where
+   "to top" promotes one in a single tap. Put your timetable first and a 10:00
+   lecture sits above a 10:00 tailgate.
+
+Time still comes first, always. Nothing marked important ever hides under
+something later in the day: the agenda is a day, not a ranking.
 
 One tap on a place under **drive** starts directions to it. Google Maps keeps
 its own Home and Work and offers no way to read them, so these are yours, typed
@@ -691,4 +697,4 @@ hardest to debug on a phone:
 - **`DestinationsTest`** - storing places without mangling an address.
 - **`AgendaOrderTest`** - which of two events at the same minute comes first.
 
-100 tests, all passing.
+105 tests, all passing.

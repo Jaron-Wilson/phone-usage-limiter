@@ -408,10 +408,12 @@ private fun Agenda(
     val todayJulian = remember(events) {
         LocalDate.now().getLong(JulianFields.JULIAN_DAY).toInt()
     }
-    val today = AgendaOrder.sort(events.filter { it.occursOn(todayJulian) }, priority)
+    val today = AgendaOrder.sort(
+        events.filter { it.occursOn(todayJulian) }, priority, highlight
+    )
     val tomorrow = AgendaOrder.sort(
         events.filter { it.occursOn(todayJulian + 1) && !it.occursOn(todayJulian) },
-        priority
+        priority, highlight
     )
 
     val current = today.firstOrNull { !it.allDay && it.begin <= now && it.end > now }

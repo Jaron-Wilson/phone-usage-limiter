@@ -111,4 +111,52 @@ class AgendaOrderTest {
     fun `an empty day has no headline`() {
         assertNull(AgendaOrder.headline(emptyList(), now, listOf(4)))
     }
+
+    // ---- marked events ----
+
+    private val work = Regex("(?i)\\bwork\\b")
+
+    @Test
+    fun `a marked event wins a clash, whatever calendar it is on`() {
+        val events = listOf(event(60, "Commuter Tailgate", 8), event(60, "Work", 8))
+        assertEquals(
+            listOf("Work", "Commuter Tailgate"),
+            AgendaOrder.sort(events, emptyList(), work).map { it.title }
+        )
+    }
+
+    @Test
+    fun `a marked event outranks even the preferred calendar`() {
+        // Both at 10:00: a shift beats a lecture, because you said so.
+        val events = listOf(event(60, "Lecture", 4), event(60, "Work shift", 8))
+        assertEquals(
+            listOf("Work shift", "Lecture"),
+            AgendaOrder.sort(events, priority = listOf(4), highlight = work).map { it.title }
+        )
+    }
+
+    @Test
+    fun `marking never lets a later event jump an earlier one`() {
+        // The agenda stays a day, not a ranking.
+        val events = listOf(event(120, "Work", 8), event(10, "Breakfast", 8))
+        assertEquals(
+            listOf("Breakfast", "Work"),
+            AgendaOrder.sort(events, emptyList(), work).map { it.title }
+        )
+    }
+
+    @Test
+    fun `the headline prefers a marked event among things running at once`() {
+        val events = listOf(event(-10, "Tailgate", 4), event(-10, "Work", 8))
+        assertEquals("Work", AgendaOrder.headline(events, now, listOf(4), work)?.title)
+    }
+
+    @Test
+    fun `without a pattern the calendar order still decides`() {
+        val events = listOf(event(60, "Work", 8), event(60, "Lecture", 4))
+        assertEquals(
+            listOf("Lecture", "Work"),
+            AgendaOrder.sort(events, priority = listOf(4), highlight = null).map { it.title }
+        )
+    }
 }

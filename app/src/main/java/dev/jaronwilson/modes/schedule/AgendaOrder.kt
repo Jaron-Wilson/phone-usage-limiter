@@ -16,11 +16,24 @@ object AgendaOrder {
         return if (index >= 0) index else Int.MAX_VALUE
     }
 
-    fun sort(events: List<CalEvent>, priority: List<Long>): List<CalEvent> =
+    /**
+     * Time first, always. Something at 09:00 never hides under something at
+     * 14:00 because it was marked important; that would make the agenda a
+     * ranking rather than a day.
+     *
+     * Within the same minute the order is: events whose title you marked worth
+     * noticing, then calendars in your stated order, then the title and id so
+     * the list never reshuffles between redraws.
+     */
+    fun sort(
+        events: List<CalEvent>,
+        priority: List<Long>,
+        highlight: Regex? = null
+    ): List<CalEvent> =
         events.sortedWith(
             compareBy<CalEvent> { it.begin }
+                .thenBy { if (highlight?.containsMatchIn(it.title) == true) 0 else 1 }
                 .thenBy { rank(it.calendarId, priority) }
-                // Last resort so the list never reshuffles between redraws.
                 .thenBy { it.title }
                 .thenBy { it.eventId }
         )
@@ -29,9 +42,18 @@ object AgendaOrder {
      * The one to put in the headline: whatever is running, else the next thing
      * due, with the same preference breaking ties.
      */
-    fun headline(events: List<CalEvent>, now: Long, priority: List<Long>): CalEvent? {
-        val running = sort(events.filter { !it.allDay && it.begin <= now && it.end > now }, priority)
+    fun headline(
+        events: List<CalEvent>,
+        now: Long,
+        priority: List<Long>,
+        highlight: Regex? = null
+    ): CalEvent? {
+        val running = sort(
+            events.filter { !it.allDay && it.begin <= now && it.end > now }, priority, highlight
+        )
         if (running.isNotEmpty()) return running.first()
-        return sort(events.filter { !it.allDay && it.begin > now }, priority).firstOrNull()
+        return sort(
+            events.filter { !it.allDay && it.begin > now }, priority, highlight
+        ).firstOrNull()
     }
 }
