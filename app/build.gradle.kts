@@ -13,6 +13,14 @@ val versionProps = Properties().apply {
     rootProject.file("version.properties").inputStream().use { load(it) }
 }
 
+// Release signing. Absent on a fresh clone, in which case release builds fall
+// back to the debug key and Gradle says so rather than failing.
+val keystoreFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystoreFile.exists()) keystoreFile.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProps.getProperty("storeFile")?.let { file(it).exists() } == true
+
 android {
     namespace = "dev.jaronwilson.modes"
     compileSdk = 35
@@ -23,12 +31,46 @@ android {
         targetSdk = 35
         versionCode = versionProps.getProperty("versionCode").trim().toInt()
         versionName = versionProps.getProperty("versionName").trim()
+
+        // This is a phone-specific tool, and a Pixel is arm64. Shipping four
+        // architectures tripled the download for nothing.
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                // Every scheme the platform understands. v1 is redundant above
+                // API 24 but costs little and rules out one class of installer
+                // complaint.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
     }
 
     buildTypes {
         release {
+            // Left off deliberately. R8 and a NotificationListenerService that
+            // the system instantiates by name are a bad combination to debug on
+            // a phone, and the size saved is not worth the risk here.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            isDebuggable = false
+            if (hasReleaseKey) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "No keystore.properties: release build will use the debug key, " +
+                        "which many devices refuse to install. See the README."
+                )
+            }
         }
         debug {
             applicationIdSuffix = ""

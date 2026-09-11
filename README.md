@@ -45,12 +45,20 @@ on**:
 
 | Folder | Open | Work | Deep focus | Personal | Sleep |
 |---|---|---|---|---|---|
-| Everyday | on | on | off | on | - |
-| Work | - | on | - | - | - |
+| People | on | on | **off** | on | **off** |
+| Everyday | on | on | **off** | on | - |
+| School | on | on | **off** | **off** | - |
 | Money | on | on | on | on | on |
 | Social | on | **off** | **off** | on | **off** |
 | Media | on | **off** | **off** | on | **off** |
-| Tools | - | - | on | - | - |
+| Tools | on | on | on | on | - |
+| Errands | on | **off** | **off** | on | **off** |
+
+Each folder ships naming every app this build knows about for that purpose,
+and **is pruned to what you actually have the first time it is seeded**. So the
+Money folder arrives listing your banks rather than twenty you have never heard
+of, without anyone having to curate it by hand. `Folders > Tidy up` does the
+same again later, after you install or remove things.
 
 Edit contents once under **Modes > Edit the folder library**. Flip switches per
 mode under **Modes > (a mode) > Arrange home screen**, or long-press any folder
@@ -121,15 +129,18 @@ Banking, cards and payments are treated as their own class, `FINANCE`:
   still gets its "introducing our new credit card" held, because the promo rules
   are checked first.
 
-The shipped list covers the common US apps (Chase, BofA, Wells Fargo, Capital
-One, Citi, Ally, Discover, Amex, USAA, PayPal, Venmo, Cash App, Zelle,
-Robinhood, Fidelity, Schwab, Chime, SoFi, Credit Karma, Google Wallet). Yours
-may differ, which is what the next section is for.
+The shipped list covers the common US banking, payment, brokerage and campus
+card apps. Anything it misses is one line in `Pkg.FINANCE`, or a rule you add
+in the app. The next section is how to find out what you actually have.
 
 ## Dumping your app list
 
 Package names are the one thing you cannot guess from a desktop, and the shipped
 folders are educated guesses about a phone nobody has seen.
+
+Note that "installed" and "has an icon" are different questions. Archived apps
+stay installed, keep their name, and vanish from the launcher query, so the dump
+marks them `no icon` rather than pretending they are gone.
 
 **From the phone**, with no computer involved: open the app, go to **Now > Dump
 your app list**, and tap **Copy** or **Send**. You get every installed app with
@@ -222,14 +233,45 @@ Add names under Rules. They are matched against the sender name on the
 notification, so one entry covers that person across texts, WhatsApp and
 Instagram DMs at once. A match overrides the mode entirely.
 
+## Screenshots
+
+Captured from a real phone rather than an emulator, because the app's whole job
+is reacting to your calendar and your notifications, and an emulator has
+neither.
+
+```bash
+./tools/screenshots.sh          # walks through every screen
+./tools/screenshots.sh --list   # what it can capture
+./tools/screenshots.sh home now # just those
+```
+
+It tells you what to open, you navigate, you press Enter. Driving Compose
+through `adb` taps is possible and breaks every time a layout moves, so it asks
+instead. Output lands in `docs/screenshots/`, with a ready-made markdown block
+to paste back into this file.
+
+### Emulator
+
+```bash
+./tools/emulator.sh --check     # will this machine run one?
+./tools/emulator.sh --install   # emulator and system image, about 2G
+./tools/emulator.sh --create    # make the AVD
+./tools/emulator.sh --start     # boot it headless
+```
+
+`--check` runs first and refuses the rest if the machine cannot do it properly.
+An emulator without hardware virtualisation does technically run, at a speed
+that makes it useless, so the script says no rather than letting you find out
+over the following hour. It needs `/dev/kvm` and about 6G free.
+
 ## Building it
 
 Needs a JDK 17 or newer and an Android SDK with platform 35.
 
 ```bash
-./tools/bump-version.sh          # 0.1.1 -> 0.1.2, and the build number
-./gradlew :app:assembleDebug
-# app/build/outputs/apk/debug/Modes-v0.1.2-debug.apk
+./tools/bump-version.sh            # 0.1.4 -> 0.1.5, and the build number
+./gradlew :app:assembleRelease
+# app/build/outputs/apk/release/Modes-v0.1.5-release.apk
 ```
 
 The version lives in `version.properties` at the repo root and the APK is named
@@ -246,10 +288,42 @@ If `local.properties` does not point at your SDK, fix that first. Unit tests:
 ## Installing it
 
 ```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./tools/install.sh          # installs, and explains any failure in words
+./tools/install.sh --clean  # uninstall first, when the signature changed
+./tools/install.sh --check  # report what is on the phone, change nothing
 ```
 
-Or copy the APK to the phone and tap it.
+Or copy `Modes-vX.Y.Z-release.apk` to the phone and tap it.
+
+**Install the release build, not the debug one.** A debug APK carries
+`android:debuggable="true"`, and current Android and Play Protect routinely
+refuse to sideload those. It looks like a corrupt download and is not. Release
+builds are signed with the key in `keystore.properties`, which is why they
+install and why upgrades keep working.
+
+### When it will not install
+
+The phone says "App not installed" for several unrelated reasons and never says
+which. `./tools/install.sh` prints the real error and what to do about it. The
+usual suspects:
+
+| What Android says | What it means |
+|---|---|
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | A copy signed with a different key is already there. Uninstall it: `./tools/install.sh --clean`. Expected exactly once, moving off the debug key. |
+| Play Protect warning, or `USER_RESTRICTED` | Play Protect blocking an unknown app. Tap "More details" then "Install anyway", or turn off scanning in Play Store > Play Protect while you install. |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | The phone has a newer build. `./tools/bump-version.sh` and rebuild. |
+| `INSTALL_PARSE_FAILED_*` | Truncated transfer. Check the file against the `.sha256` next to it. |
+
+### The signing key
+
+Release builds are signed with a key at `~/.modes-signing/modes.jks`, with the
+passwords in `keystore.properties` at the repo root. Both are gitignored.
+
+**Back them up.** Android will only accept an upgrade signed with the same key,
+so losing the keystore means every future version has to be installed over an
+uninstall, taking your settings with it. A fresh clone without these files still
+builds; release falls back to the debug key and Gradle warns that the result
+probably will not install.
 
 ## First run, in this order
 
@@ -357,8 +431,21 @@ than touching the database. If you add anything the gate needs, add it there.
   thumb can still get through by turning the service off in Settings. That is
   deliberate: a tool you cannot escape is one you will uninstall.
 - **Database migrations are destructive** (`fallbackToDestructiveMigration`),
-  and the schema is at version 3. Upgrading from an earlier build resets your
-  modes and folders to the defaults. Fine while iterating. Change it before you
+  and the schema is at version 4. Upgrading from an earlier build resets your
+  modes and folders to the defaults, which is how retuned folders arrive.
+- **`QUERY_ALL_PACKAGES` is declared.** A launcher has to be able to list what
+  is installed, and the `<queries>` element alone misses archived apps. This is
+  a restricted permission on Play and irrelevant to a sideloaded build.
+- **Only `arm64-v8a` is packaged.** That is what a Pixel is; shipping four
+  architectures tripled the size for nothing. Add them back in `abiFilters` if
+  the app ever needs to run on something else.
+- **R8 is off for release builds.** The system instantiates
+  `NotificationGate` and `AppGuardService` by name, and debugging a stripped
+  service on a phone is miserable. The APK is bigger than it needs to be and
+  that is the trade.
+- **`targetSdk` is 35 while the phone runs Android 17.** Everything works, but
+  the app is getting compatibility behaviour rather than the current one. Worth
+  raising when there is a reason to. Fine while iterating. Change it before you
   have settings worth keeping.
 
 ## Tests
@@ -377,4 +464,14 @@ hardest to debug on a phone:
 ./gradlew :app:testDebugUnitTest
 ```
 
-38 tests, all passing.
+- **`DefaultsTest`** - the shipped modes checked against a real phone's app
+  inventory. It asserts every folder has something on the device, that every
+  mode can still reach a dialer, a way to text and a bank, and that no
+  allowlist mode would stop you opening an essential. This is the file that
+  catches a default that reads fine but leaves you stranded at 11pm.
+
+```bash
+./gradlew :app:testDebugUnitTest
+```
+
+52 tests, all passing.
