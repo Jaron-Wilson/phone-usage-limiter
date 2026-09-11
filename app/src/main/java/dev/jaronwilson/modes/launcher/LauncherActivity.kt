@@ -155,13 +155,13 @@ private fun Home() {
     val events by produceState(initialValue = emptyList<CalEvent>()) {
         while (true) {
             val now = System.currentTimeMillis()
-            val endOfDay = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault())
+            val endOfTomorrow = LocalDate.now().plusDays(2).atStartOfDay(ZoneId.systemDefault())
                 .toInstant().toEpochMilli()
             value = runCatching {
-                AppGraph.scheduler.calendar.events(now - 12 * 60 * 60_000L, endOfDay)
-                    .filter { !it.allDay && it.end > now }
+                AppGraph.scheduler.calendar.events(now - 12 * 60 * 60_000L, endOfTomorrow)
+                    .filter { it.end > now }
                     .sortedBy { it.begin }
-                    .take(8)
+                    .take(24)
             }.getOrDefault(emptyList())
             delay(5 * 60_000L)
         }
@@ -290,22 +290,35 @@ private fun Home() {
     }
 }
 
-/**
- * The day, with what matters most first: the thing happening now, large, then
- * the rest of today. Reading this should answer "what am I meant to be doing"
- * without opening anything.
- */
+/** Why the agenda is empty, so the screen can say something useful. */
 private enum class CalendarState { OK, NO_PERMISSION, NO_CALENDARS }
 
+/**
+ * The day, with what matters most first: the thing happening now, large, then
+ * the rest of today, then a quieter look at tomorrow. Reading this should
+ * answer "what am I meant to be doing, and what is coming" without opening
+ * anything.
+ *
+ * All-day entries are kept but never promoted to the headline: a deadline that
+ * spans the whole day is worth seeing and is not what you are doing right now.
+ */
 @Composable
 private fun Agenda(events: List<CalEvent>, state: CalendarState) {
     val context = LocalContext.current
+    val zone = ZoneId.systemDefault()
     val now = System.currentTimeMillis()
     val fmt = DateTimeFormatter.ofPattern("H:mm")
-    fun t(ms: Long) = fmt.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
+    fun t(ms: Long) = fmt.format(Instant.ofEpochMilli(ms).atZone(zone))
 
-    val current = events.firstOrNull { it.begin <= now && it.end > now }
-    val upcoming = events.filter { it.begin > now }
+    val startOfTomorrow = remember(events) {
+        LocalDate.now().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    }
+    val today = events.filter { it.begin < startOfTomorrow }
+    val tomorrow = events.filter { it.begin >= startOfTomorrow }
+
+    val current = today.firstOrNull { !it.allDay && it.begin <= now && it.end > now }
+    val upcomingToday = today.filter { it.begin > now || (it.allDay && it.end > now) }
+        .filter { it != current }
 
     Column {
         when {
@@ -322,8 +335,8 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState) {
                 )
                 Text("until ${t(current.end)}", fontSize = 14.sp, color = InkDim)
             }
-            upcoming.isNotEmpty() -> {
-                val next = upcoming.first()
+            upcomingToday.any { !it.allDay } -> {
+                val next = upcomingToday.first { !it.allDay }
                 Text("NEXT", fontSize = 11.sp, letterSpacing = 2.sp, color = InkDim)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -340,59 +353,101 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState) {
                 Text(
                     "Calendar access is off. Tap to fix.",
                     fontSize = 15.sp, color = InkDim,
-                    modifier = Modifier.clickable {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                                    .setData(android.net.Uri.parse("package:${context.packageName}"))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
-                    }
+                    modifier = Modifier.clickable { openAppInfo(context) }
                 )
             }
             state == CalendarState.NO_CALENDARS -> {
-                // The usual cause: events live in Outlook or a Google account
-                // whose calendar sync is off, so the phone's own store is empty.
                 Text(
                     "No calendar is synced to this phone. Tap to check account sync.",
                     fontSize = 15.sp, color = InkDim,
-                    modifier = Modifier.clickable {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Settings.ACTION_SYNC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
-                    }
+                    modifier = Modifier.clickable { openSyncSettings(context) }
                 )
             }
+            tomorrow.isNotEmpty() -> {
+                Text("Nothing left today", fontSize = 15.sp, color = InkFaint)
+            }
             else -> {
-                Text("Nothing on the calendar today", fontSize = 15.sp, color = InkFaint)
+                Text("Nothing on the calendar", fontSize = 15.sp, color = InkFaint)
             }
         }
 
-        val rest = if (current != null) upcoming else upcoming.drop(1)
-        if (rest.isNotEmpty()) {
+        val restOfToday = upcomingToday.filterNot { it == current }
+            .let { list ->
+                // The headline already showed the first timed one.
+                val headline = list.firstOrNull { !it.allDay }
+                if (current == null && headline != null) list.filter { it != headline } else list
+            }
+
+        if (restOfToday.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                rest.take(5).forEach { event ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { openEvent(context, event) }
-                    ) {
-                        Box(Modifier.size(4.dp).clip(CircleShape).background(InkFaint))
-                        Spacer(Modifier.width(10.dp))
-                        Text(t(event.begin), fontSize = 14.sp, color = InkDim, modifier = Modifier.width(48.dp))
-                        Text(
-                            event.title, fontSize = 14.sp, color = InkDim,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+            EventList(restOfToday.take(4)) { openEvent(context, it) }
+        }
+
+        if (tomorrow.isNotEmpty()) {
+            Spacer(Modifier.height(18.dp))
+            Text("TOMORROW", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
+            Spacer(Modifier.height(6.dp))
+            EventList(tomorrow.take(4)) { openEvent(context, it) }
+            if (tomorrow.size > 4) {
+                Text(
+                    "and ${tomorrow.size - 4} more",
+                    fontSize = 13.sp,
+                    color = InkFaint,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun EventList(events: List<CalEvent>, onClick: (CalEvent) -> Unit) {
+    val zone = ZoneId.systemDefault()
+    val fmt = DateTimeFormatter.ofPattern("H:mm")
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        events.forEach { event ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onClick(event) }
+            ) {
+                Box(Modifier.size(4.dp).clip(CircleShape).background(InkFaint))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (event.allDay) "all day"
+                    else fmt.format(Instant.ofEpochMilli(event.begin).atZone(zone)),
+                    fontSize = 14.sp,
+                    color = InkDim,
+                    modifier = Modifier.width(56.dp)
+                )
+                Text(
+                    event.title,
+                    fontSize = 14.sp,
+                    color = InkDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+private fun openAppInfo(context: Context) {
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(android.net.Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
+private fun openSyncSettings(context: Context) {
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_SYNC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
     }
 }
 

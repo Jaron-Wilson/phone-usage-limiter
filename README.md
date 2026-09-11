@@ -89,8 +89,12 @@ NOW
 Sprint planning
 until 11:00
 
- · 11:30  1:1
- · 14:00  Design review
+ · all day  Quarter ends
+ · 14:00    Design review
+
+TOMORROW
+ · 10:00    Standup
+ · 13:00    Interview
 
 Phone
 Messages
@@ -103,7 +107,11 @@ everything else
 ```
 
 Tap a folder to expand it in place, long-press to edit which folders this mode
-uses. Apps you reach for constantly sit at the top
+uses. Tomorrow is shown in a quieter weight below today, so the evening
+question of "what am I walking into" is answered without unlocking anything.
+All-day entries appear in the lists but are never promoted to the headline: a
+deadline spanning the whole day is worth seeing and is not what you are doing
+right now. Apps you reach for constantly sit at the top
 level, because a folder you open twenty times a day is just friction.
 
 **When a mode's guard is set to allowlist, this screen is also its permission
