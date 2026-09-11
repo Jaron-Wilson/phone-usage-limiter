@@ -3,6 +3,8 @@ package dev.jaronwilson.modes.core
 import android.app.NotificationManager
 import dev.jaronwilson.modes.core.model.CalendarRule
 import dev.jaronwilson.modes.core.model.GuardMode
+import dev.jaronwilson.modes.core.model.GuardScope
+import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.MatchField
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifClass
@@ -33,9 +35,47 @@ object Pkg {
     const val TIKTOK = "com.zhiliaoapp.musically"
     const val X = "com.twitter.android"
     const val REDDIT = "com.reddit.frontpage"
+    const val DRIVE = "com.google.android.apps.docs"
+    const val PHOTOS = "com.google.android.apps.photos"
+    const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
+    const val PODCASTS = "com.google.android.apps.podcasts"
+    const val AUTHENTICATOR = "com.google.android.apps.authenticator2"
+
+    // Banking and money. These are the common US apps; yours may differ, so
+    // run tools/pull-apps.sh to see what is actually on the phone and edit the
+    // Money folder in the app.
+    const val CHASE = "com.chase.sig.android"
+    const val BOFA = "com.infonow.bofa"
+    const val WELLS_FARGO = "com.wf.wellsfargomobile"
+    const val CAPITAL_ONE = "com.konylabs.capitalone"
+    const val CITI = "com.citi.citimobile"
+    const val ALLY = "com.ally.MobileBanking"
+    const val DISCOVER = "com.discoverfinancial.mobile"
+    const val AMEX = "com.americanexpress.android.acctsvcs.us"
+    const val USAA = "com.usaa.mobile.android.usaa"
+    const val PAYPAL = "com.paypal.android.p2pmobile"
+    const val VENMO = "com.venmo"
+    const val CASH_APP = "com.squareup.cash"
+    const val ZELLE = "com.zellepay.zelle"
+    const val ROBINHOOD = "com.robinhood.android"
+    const val FIDELITY = "com.fidelity.android"
+    const val SCHWAB = "com.schwab.mobile"
+    const val CHIME = "com.onedebit.chime"
+    const val SOFI = "com.sofi.mobile"
+    const val CREDIT_KARMA = "com.creditkarma.mobile"
+
+    /**
+     * Money apps. Allowed to interrupt in every mode by default, and never
+     * guarded: a fraud alert you did not see is worse than any distraction.
+     */
+    val FINANCE = setOf(
+        CHASE, BOFA, WELLS_FARGO, CAPITAL_ONE, CITI, ALLY, DISCOVER, AMEX, USAA,
+        PAYPAL, VENMO, CASH_APP, ZELLE, ROBINHOOD, FIDELITY, SCHWAB, CHIME,
+        SOFI, CREDIT_KARMA, WALLET
+    )
 
     /** Apps that should never be hidden or guarded: you always need a way out. */
-    val ESSENTIAL = setOf(DIALER, MESSAGES, CLOCK, SETTINGS, CONTACTS)
+    val ESSENTIAL = setOf(DIALER, MESSAGES, CLOCK, SETTINGS, CONTACTS, AUTHENTICATOR)
 
     /** Sensible starting guess for apps worth putting behind friction. */
     val DISTRACTING = setOf(INSTAGRAM, YOUTUBE, TIKTOK, X, REDDIT)
@@ -60,7 +100,7 @@ val PACKAGE_DEFAULT_CLASS: Map<String, NotifClass> = mapOf(
     Pkg.REDDIT to NotifClass.SOCIAL,
     "android" to NotifClass.SYSTEM,
     "com.google.android.gms" to NotifClass.SYSTEM
-)
+) + Pkg.FINANCE.associateWith { NotifClass.FINANCE }
 
 private fun hm(h: Int, m: Int = 0) = h * 60 + m
 
@@ -80,11 +120,8 @@ object Defaults {
             sortOrder = 0,
             isDefault = true,
             allowedClasses = NotifClass.entries.toSet(),
-            homeApps = listOf(
-                Pkg.DIALER, Pkg.MESSAGES, Pkg.CALENDAR, Pkg.GMAIL,
-                Pkg.MAPS, Pkg.CAMERA, Pkg.CHROME, Pkg.INSTAGRAM
-            ),
             guardMode = GuardMode.OFF,
+            guardScope = GuardScope.BLOCKLIST,
             interruptionFilter = 0,
             digestEveryMinutes = 0,
             releaseOnModeExit = true
@@ -94,14 +131,15 @@ object Defaults {
             name = "Work",
             glyph = "◑",
             sortOrder = 1,
-            allowedClasses = setOf(NotifClass.CALL, NotifClass.DIRECT, NotifClass.MENTION),
+            allowedClasses = setOf(
+                NotifClass.CALL, NotifClass.DIRECT, NotifClass.MENTION, NotifClass.FINANCE
+            ),
             allowedPackages = setOf(Pkg.CALENDAR),
             blockedPackages = setOf(Pkg.INSTAGRAM, Pkg.YOUTUBE, Pkg.TIKTOK, Pkg.REDDIT, Pkg.X),
-            homeApps = listOf(
-                Pkg.DIALER, Pkg.MESSAGES, Pkg.CALENDAR, Pkg.GMAIL,
-                Pkg.SLACK, Pkg.KEEP, Pkg.MAPS, Pkg.CLOCK
-            ),
+            // Anything not in a Work folder is off-limits, so an app you install
+            // next week does not quietly become a new way to lose an afternoon.
             guardMode = GuardMode.SPEEDBUMP,
+            guardScope = GuardScope.ALLOWLIST,
             speedbumpSeconds = 10,
             passMinutes = 5,
             interruptionFilter = NotificationManager.INTERRUPTION_FILTER_PRIORITY,
@@ -117,8 +155,8 @@ object Defaults {
             // a phone you can actually leave face-down.
             allowedClasses = setOf(NotifClass.CALL),
             blockedPackages = Pkg.DISTRACTING + setOf(Pkg.GMAIL, Pkg.SLACK, Pkg.CHROME),
-            homeApps = listOf(Pkg.DIALER, Pkg.MESSAGES, Pkg.CLOCK, Pkg.KEEP),
             guardMode = GuardMode.BLOCK,
+            guardScope = GuardScope.ALLOWLIST,
             speedbumpSeconds = 20,
             passMinutes = 3,
             interruptionFilter = NotificationManager.INTERRUPTION_FILTER_PRIORITY,
@@ -137,13 +175,11 @@ object Defaults {
             glyph = "◔",
             sortOrder = 3,
             allowedClasses = setOf(
-                NotifClass.CALL, NotifClass.DIRECT, NotifClass.MENTION, NotifClass.STORY
+                NotifClass.CALL, NotifClass.DIRECT, NotifClass.MENTION,
+                NotifClass.STORY, NotifClass.FINANCE
             ),
-            homeApps = listOf(
-                Pkg.DIALER, Pkg.MESSAGES, Pkg.INSTAGRAM, Pkg.CAMERA,
-                Pkg.MAPS, Pkg.SPOTIFY, Pkg.CHROME, Pkg.CLOCK
-            ),
-            guardMode = GuardMode.OFF,
+            guardMode = GuardMode.SPEEDBUMP,
+            guardScope = GuardScope.BLOCKLIST,
             interruptionFilter = 0,
             digestEveryMinutes = 90
         ),
@@ -154,8 +190,8 @@ object Defaults {
             sortOrder = 4,
             allowedClasses = setOf(NotifClass.CALL),
             blockedPackages = Pkg.DISTRACTING,
-            homeApps = listOf(Pkg.CLOCK, Pkg.DIALER, Pkg.MESSAGES),
             guardMode = GuardMode.SPEEDBUMP,
+            guardScope = GuardScope.ALLOWLIST,
             speedbumpSeconds = 30,
             passMinutes = 5,
             interruptionFilter = NotificationManager.INTERRUPTION_FILTER_PRIORITY,
@@ -224,6 +260,83 @@ object Defaults {
     )
 
     /**
+     * The starting home screens.
+     *
+     * Read these as answers to "what is this mode for". Under
+     * [GuardScope.ALLOWLIST] they are also the mode's permission list, so an
+     * app in no folder is an app you cannot open without going through a pause.
+     *
+     * Single apps sit at the top level, because a folder you open twenty times
+     * a day is just friction. Everything else is grouped.
+     */
+    fun homeEntries(): List<HomeEntry> {
+        val money = Pkg.FINANCE.toList()
+
+        fun layout(modeId: String, build: MutableList<HomeEntry>.() -> Unit): List<HomeEntry> {
+            val rows = mutableListOf<HomeEntry>()
+            rows.build()
+            return rows.mapIndexed { i, e -> e.copy(modeId = modeId, sortOrder = i) }
+        }
+
+        fun app(pkg: String) = HomeEntry(modeId = "", packageName = pkg)
+        fun folder(name: String, vararg pkgs: String) =
+            HomeEntry(modeId = "", folderName = name, packages = pkgs.toList())
+
+        return buildList {
+            addAll(
+                layout(MODE_OPEN) {
+                    add(app(Pkg.DIALER))
+                    add(app(Pkg.MESSAGES))
+                    add(app(Pkg.CALENDAR))
+                    add(app(Pkg.CAMERA))
+                    add(folder("Everyday", Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME))
+                    add(folder("Money", *money.toTypedArray()))
+                    add(folder("Social", Pkg.INSTAGRAM, Pkg.SPOTIFY, Pkg.YOUTUBE))
+                    add(folder("Odds and ends", Pkg.PHOTOS, Pkg.KEEP, Pkg.CLOCK, Pkg.WALLET))
+                }
+            )
+            addAll(
+                layout(MODE_WORK) {
+                    add(app(Pkg.DIALER))
+                    add(app(Pkg.MESSAGES))
+                    add(app(Pkg.CALENDAR))
+                    add(folder("Work", Pkg.GMAIL, Pkg.SLACK, Pkg.KEEP, Pkg.DRIVE))
+                    add(folder("Everyday", Pkg.MAPS, Pkg.CHROME, Pkg.WALLET))
+                    add(folder("Money", *money.toTypedArray()))
+                }
+            )
+            addAll(
+                layout(MODE_FOCUS) {
+                    add(app(Pkg.DIALER))
+                    add(app(Pkg.MESSAGES))
+                    add(app(Pkg.CLOCK))
+                    add(folder("Tools", Pkg.KEEP, Pkg.CALENDAR))
+                    add(folder("Money", *money.toTypedArray()))
+                }
+            )
+            addAll(
+                layout(MODE_PERSONAL) {
+                    add(app(Pkg.DIALER))
+                    add(app(Pkg.MESSAGES))
+                    add(app(Pkg.CALENDAR))
+                    add(app(Pkg.CAMERA))
+                    add(folder("Everyday", Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME))
+                    add(folder("Money", *money.toTypedArray()))
+                    add(folder("Social", Pkg.INSTAGRAM, Pkg.SPOTIFY, Pkg.YOUTUBE))
+                }
+            )
+            addAll(
+                layout(MODE_SLEEP) {
+                    add(app(Pkg.CLOCK))
+                    add(app(Pkg.DIALER))
+                    add(app(Pkg.MESSAGES))
+                    add(folder("Money", *money.toTypedArray()))
+                }
+            )
+        }
+    }
+
+    /**
      * Text rules that sort real messages from engagement bait.
      *
      * There is no Instagram API for DMs or stories, so this reads the
@@ -238,11 +351,14 @@ object Defaults {
         // ---- universal ----
         NotifRule(
             pattern = "(?i)\\b(incoming call|missed call|is calling|calling you)\\b",
-            target = NotifClass.CALL, priority = 200, note = "Calls always win"
+            target = NotifClass.CALL, alwaysThrough = true,
+            priority = 200, note = "Calls always win"
         ),
         NotifRule(
-            pattern = "(?i)\\b(verification|security) code\\b|\\b\\d{6} is your\\b",
-            target = NotifClass.DIRECT, priority = 190, note = "One-time codes must get through"
+            pattern = "(?i)\\b(verification|security|login|access|one.time) code\\b|" +
+                "\\b\\d{4,8} is your\\b|\\bdo not share this code\\b",
+            target = NotifClass.DIRECT, alwaysThrough = true,
+            priority = 195, note = "One-time codes, even at 3am"
         ),
 
         // ---- Instagram ----
@@ -272,6 +388,25 @@ object Defaults {
                 "don.t miss|recently shared|back on instagram|you.ve been missed|" +
                 "complete your profile|turn on notifications)",
             target = NotifClass.PROMO, priority = 145, note = "Engagement bait"
+        ),
+
+        // ---- money ----
+        // Fraud is the one thing worth waking up for, so these break through
+        // every mode, including Sleep and Deep focus.
+        NotifRule(
+            pattern = "(?i)\\b(fraud|suspicious (activity|charge|transaction)|unusual (activity|sign.?in)|" +
+                "unauthori[sz]ed|card (was )?declined|security alert|account (locked|frozen|compromised)|" +
+                "did you (make|try) this|verify this (charge|transaction)|" +
+                "(overdraft|insufficient funds|payment (failed|declined)))\\b",
+            target = NotifClass.FINANCE, alwaysThrough = true,
+            priority = 185, note = "Fraud and account trouble"
+        ),
+        NotifRule(
+            pattern = "(?i)\\b(deposit|direct deposit|payment (received|due|posted|sent)|" +
+                "transaction|withdrawal|transfer|statement (is )?(ready|available)|" +
+                "balance|you (paid|received|sent)|charged \\$|\\bautopay\\b)\\b",
+            target = NotifClass.FINANCE,
+            priority = 120, note = "Ordinary money movement"
         ),
 
         // ---- generic noise ----

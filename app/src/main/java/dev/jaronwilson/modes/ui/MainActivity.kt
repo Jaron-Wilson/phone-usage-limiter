@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.notify.DigestPublisher
 import dev.jaronwilson.modes.ui.screens.DigestScreen
+import dev.jaronwilson.modes.ui.screens.HomeLayoutScreen
 import dev.jaronwilson.modes.ui.screens.ModeEditScreen
 import dev.jaronwilson.modes.ui.screens.ModesScreen
 import dev.jaronwilson.modes.ui.screens.NowScreen
@@ -118,7 +119,15 @@ private fun AppShell(startOnDigest: Boolean) {
                 ModesScreen(onEdit = { id -> nav.navigate("mode/$id") })
             }
             composable("mode/{id}") { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
                 ModeEditScreen(
+                    modeId = id,
+                    onDone = { nav.popBackStack() },
+                    onEditHome = { nav.navigate("home/$id") }
+                )
+            }
+            composable("home/{id}") { entry ->
+                HomeLayoutScreen(
                     modeId = entry.arguments?.getString("id").orEmpty(),
                     onDone = { nav.popBackStack() }
                 )

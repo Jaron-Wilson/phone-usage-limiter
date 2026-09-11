@@ -3,6 +3,7 @@ package dev.jaronwilson.modes.core.repo
 import android.content.Context
 import dev.jaronwilson.modes.core.Defaults
 import dev.jaronwilson.modes.core.db.ModesDatabase
+import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
@@ -26,8 +27,19 @@ data class PolicySnapshot(
     val notifRules: List<NotifRule>,
     val vips: List<Vip>,
     val gateEnabled: Boolean,
-    val guardEnabled: Boolean
+    val guardEnabled: Boolean,
+    /** The active mode's home screen, in order. */
+    val homeEntries: List<HomeEntry> = emptyList()
 ) {
+    /**
+     * Every package reachable from the current home screen. Under
+     * [dev.jaronwilson.modes.core.model.GuardScope.ALLOWLIST] this is exactly
+     * the set of apps the mode permits, which is why arranging your folders and
+     * choosing what you are allowed to open are the same action.
+     */
+    val homePackages: Set<String> =
+        homeEntries.flatMap { it.reachable }.toSet()
+
     /** Pre-compiled so matching a notification does not recompile regexes. */
     val compiledRules: List<Pair<NotifRule, Regex>> = notifRules.mapNotNull { rule ->
         runCatching { rule to Regex(rule.pattern) }.getOrNull()
@@ -45,6 +57,7 @@ class ModeRepository(
     val modeDao = db.modeDao()
     val ruleDao = db.ruleDao()
     val heldDao = db.heldDao()
+    val homeDao = db.homeDao()
     val passDao = db.passDao()
     val settings = SettingsStore(context)
 
@@ -62,8 +75,12 @@ class ModeRepository(
         modeDao.observeAll(),
         ruleDao.observeNotifRules(),
         ruleDao.observeVips(),
-        combine(settings.gateEnabled, settings.guardEnabled) { g, u -> g to u }
-    ) { active, allModes, rules, vips, toggles ->
+        combine(
+            settings.gateEnabled,
+            settings.guardEnabled,
+            homeDao.observeAll()
+        ) { gate, guard, home -> Triple(gate, guard, home) }
+    ) { active, allModes, rules, vips, extra ->
         val mode = allModes.firstOrNull { it.id == active.modeId }
             ?: allModes.firstOrNull { it.isDefault }
             ?: allModes.firstOrNull()
@@ -72,8 +89,9 @@ class ModeRepository(
             mode = mode,
             notifRules = rules.filter { it.enabled }.sortedByDescending { it.priority },
             vips = vips.filter { it.enabled },
-            gateEnabled = toggles.first,
-            guardEnabled = toggles.second
+            gateEnabled = extra.first,
+            guardEnabled = extra.second,
+            homeEntries = extra.third.filter { it.modeId == mode.id }.sortedBy { it.sortOrder }
         )
     }
 
@@ -91,6 +109,7 @@ class ModeRepository(
         if (ruleDao.notifRuleCount() == 0) Defaults.notifRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.timeRuleCount() == 0) Defaults.timeRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.calendarRuleCount() == 0) Defaults.calendarRules().forEach { ruleDao.upsert(it) }
+        if (homeDao.count() == 0) homeDao.upsertAll(Defaults.homeEntries())
         settings.setSeeded(true)
     }
 
@@ -103,6 +122,8 @@ class ModeRepository(
         Defaults.timeRules().forEach { ruleDao.upsert(it) }
         ruleDao.observeCalendarRules().first().forEach { ruleDao.delete(it) }
         Defaults.calendarRules().forEach { ruleDao.upsert(it) }
+        modeDao.getAll().forEach { homeDao.clearMode(it.id) }
+        homeDao.upsertAll(Defaults.homeEntries())
     }
 
     suspend fun mode(id: String): Mode? = modeDao.get(id)

@@ -20,6 +20,8 @@ enum class NotifClass {
     STORY,
     /** Likes, follows, "X posted for the first time in a while", suggestions. */
     SOCIAL,
+    /** Money moving: transactions, balances, payment due, fraud alerts. */
+    FINANCE,
     /** Marketing, promos, "check out what's new". */
     PROMO,
     /** Battery, updates, sync, app-internal status. */
@@ -34,10 +36,27 @@ enum class NotifClass {
             MENTION -> "Mentions & replies"
             STORY -> "Stories & live"
             SOCIAL -> "Likes & follows"
+            FINANCE -> "Money"
             PROMO -> "Promotions"
             SYSTEM -> "System"
             OTHER -> "Everything else"
         }
+}
+
+/**
+ * Which apps a mode guards.
+ *
+ * [ALLOWLIST] is the stricter and more useful setting: the mode's home screen
+ * *is* the list of apps it is for, and anything else gets stopped. That means a
+ * newly installed app, or one you opened from a link, is off-limits by default
+ * rather than silently allowed. Essentials are never guarded either way, so you
+ * cannot lock yourself out.
+ */
+enum class GuardScope {
+    /** Only the apps explicitly set aside in this mode are guarded. */
+    BLOCKLIST,
+    /** Anything not on this mode's home screen is guarded. */
+    ALLOWLIST
 }
 
 /** How hard the mode pushes back when you open an app it does not allow. */
@@ -76,9 +95,10 @@ data class Mode(
     val vipsAlwaysThrough: Boolean = true,
 
     // ---- home screen ----
-    /** Ordered package names shown on the minimal home screen. */
-    val homeApps: List<String> = emptyList(),
+    // The layout itself lives in the home_entries table, because folders need
+    // their own rows. See [HomeEntry].
     val guardMode: GuardMode = GuardMode.OFF,
+    val guardScope: GuardScope = GuardScope.BLOCKLIST,
     /** Seconds the speed bump makes you wait before the "open anyway" button works. */
     val speedbumpSeconds: Int = 10,
     /** How long an "open anyway" pass lasts, in minutes. */
@@ -148,10 +168,43 @@ data class NotifRule(
     /** Regex, case-insensitive. */
     val pattern: String,
     val target: NotifClass,
+    /**
+     * Break through whatever the mode says. For the handful of things that are
+     * never noise: a fraud alert, a one-time passcode, a school closure.
+     */
+    val alwaysThrough: Boolean = false,
     /** Higher wins. */
     val priority: Int = 0,
     val note: String = ""
 )
+
+/**
+ * One row on the minimal home screen: either a single app, or a named folder
+ * holding several.
+ *
+ * A folder is not just tidying. Under [GuardScope.ALLOWLIST] the packages
+ * reachable from this screen are exactly the packages the mode permits, so
+ * deciding what goes in a folder is the same act as deciding what the mode is
+ * for.
+ */
+@Entity(tableName = "home_entries", indices = [Index("modeId")])
+data class HomeEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val modeId: String,
+    val sortOrder: Int = 0,
+    /** Set for a single-app row, null for a folder. */
+    val packageName: String? = null,
+    /** Set for a folder, blank for a single-app row. */
+    val folderName: String = "",
+    /** Contents of a folder, in order. Empty for a single-app row. */
+    val packages: List<String> = emptyList()
+) {
+    val isFolder: Boolean get() = packageName == null
+
+    /** Every package this row can reach. */
+    val reachable: List<String>
+        get() = if (isFolder) packages else listOfNotNull(packageName)
+}
 
 /** A person who gets through no matter what the mode says. */
 @Entity(tableName = "vips")

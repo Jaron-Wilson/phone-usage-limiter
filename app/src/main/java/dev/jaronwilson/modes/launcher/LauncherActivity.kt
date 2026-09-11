@@ -1,11 +1,15 @@
 package dev.jaronwilson.modes.launcher
 
+import android.content.ContentUris
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.provider.CalendarContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +23,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -31,32 +38,48 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jaronwilson.modes.AppGraph
+import dev.jaronwilson.modes.core.model.HomeEntry
+import dev.jaronwilson.modes.notify.DigestPublisher
+import dev.jaronwilson.modes.schedule.CalEvent
 import dev.jaronwilson.modes.ui.MainActivity
 import dev.jaronwilson.modes.ui.theme.ModesTheme
+import kotlinx.coroutines.delay
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+private val Ink = Color(0xFFD8D4CC)
+private val InkBright = Color(0xFFE8E4DC)
+private val InkDim = Color(0xFF6A6A73)
+private val InkFaint = Color(0xFF3A3A44)
+private val Accent = Color(0xFFB8A88A)
 
 /**
  * A home screen with nothing on it.
  *
- * No icons, no grid, no wallpaper widgets, no swipe-up drawer full of colour.
- * Just the handful of apps the current mode says you need, as words. Getting to
- * anything else takes typing its name, which is a small enough friction to stop
- * an idle thumb and a small enough one not to be annoying when you mean it.
+ * No icon grid, no drawer full of colour. The current mode's apps as words,
+ * grouped into folders, with today's calendar above them. Getting to anything
+ * else takes typing its name, which is enough friction to stop an idle thumb
+ * and not enough to annoy you when you mean it.
  *
- * Setting this as your default launcher is optional. Everything else in the app
- * works without it.
+ * Setting this as your default launcher is optional, but the folders here are
+ * also the mode's allow list when its guard is set to allowlist, so this screen
+ * is where you say what a mode is for.
  */
 class LauncherActivity : ComponentActivity() {
 
@@ -69,7 +92,6 @@ class LauncherActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Pressing home while already home should feel like a reset, not a no-op.
         setIntent(intent)
     }
 }
@@ -79,32 +101,47 @@ private fun Home() {
     val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var openFolder by remember { mutableStateOf<Long?>(null) }
 
     val mode by AppGraph.repo.activeMode.collectAsState(initial = null)
     val active by AppGraph.repo.settings.active.collectAsState(
         initial = dev.jaronwilson.modes.core.repo.SettingsStore.ActiveState()
     )
     val heldCount by AppGraph.repo.heldDao.observePendingCount().collectAsState(initial = 0)
+    val entries by AppGraph.repo.homeDao
+        .observeForMode(mode?.id.orEmpty())
+        .collectAsState(initial = emptyList())
 
     var clock by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
             clock = LocalDateTime.now()
-            kotlinx.coroutines.delay(10_000)
+            delay(10_000)
         }
     }
 
-    BackHandler(enabled = showAll) {
+    // Refreshed on its own clock: the calendar changes far less often than the
+    // minute does, and querying the provider is not free.
+    val events by produceState(initialValue = emptyList<CalEvent>()) {
+        while (true) {
+            val now = System.currentTimeMillis()
+            value = runCatching {
+                AppGraph.scheduler.calendar.events(now - 30 * 60_000L, now + 16 * 60 * 60_000L)
+                    .filter { !it.allDay && it.end > now }
+                    .sortedBy { it.begin }
+                    .take(4)
+            }.getOrDefault(emptyList())
+            delay(5 * 60_000L)
+        }
+    }
+
+    BackHandler(enabled = showAll || openFolder != null) {
         showAll = false
+        openFolder = null
         query = ""
     }
 
     val allApps = remember { AppList.all(context) }
-    val homeApps = remember(mode?.homeApps) {
-        mode?.homeApps.orEmpty()
-            .filter { AppList.isInstalled(context, it) }
-            .map { AppEntry(it, AppList.label(context, it)) }
-    }
 
     Box(
         Modifier
@@ -114,78 +151,76 @@ private fun Home() {
             .padding(horizontal = 28.dp)
     ) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(36.dp))
 
             Text(
                 clock.format(DateTimeFormatter.ofPattern("H:mm")),
-                fontSize = 64.sp,
-                color = Color(0xFFE8E4DC),
-                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 64.sp)
+                fontSize = 60.sp,
+                color = InkBright,
+                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 60.sp)
             )
             Text(
                 clock.format(DateTimeFormatter.ofPattern("EEEE d MMMM")),
                 fontSize = 14.sp,
-                color = Color(0xFF6A6A73)
+                color = InkDim
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "${mode?.glyph.orEmpty()} ${mode?.name ?: ""}".trim(),
                     fontSize = 13.sp,
                     letterSpacing = 2.sp,
-                    color = Color(0xFFB8A88A),
-                    modifier = Modifier.clickable {
-                        context.startActivity(
-                            Intent(context, MainActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
+                    color = Accent,
+                    modifier = Modifier.clickable { openApp(context) }
                 )
                 if (active.reason.isNotBlank()) {
                     Text(
                         "  ${active.reason}",
                         fontSize = 13.sp,
-                        color = Color(0xFF4A4A52),
-                        maxLines = 1
+                        color = InkFaint,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
             if (heldCount > 0) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
                     "$heldCount waiting",
                     fontSize = 13.sp,
-                    color = Color(0xFF4A4A52),
-                    modifier = Modifier.clickable {
-                        context.startActivity(
-                            Intent(context, MainActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                .putExtra(
-                                    dev.jaronwilson.modes.notify.DigestPublisher.EXTRA_SHOW_DIGEST,
-                                    true
-                                )
-                        )
-                    }
+                    color = InkFaint,
+                    modifier = Modifier.clickable { openApp(context, showDigest = true) }
                 )
             }
 
-            Spacer(Modifier.height(40.dp))
+            if (!showAll && events.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                Agenda(events)
+            }
+
+            Spacer(Modifier.height(28.dp))
 
             if (!showAll) {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    items(homeApps, key = { it.packageName }) { app ->
-                        AppRow(app.label) { AppList.launch(context, app.packageName) }
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    items(entries, key = { it.id }) { entry ->
+                        HomeRow(
+                            entry = entry,
+                            expanded = openFolder == entry.id,
+                            onToggle = {
+                                openFolder = if (openFolder == entry.id) null else entry.id
+                            }
+                        )
                     }
                     item {
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(20.dp))
                         Text(
                             "everything else",
                             fontSize = 13.sp,
                             letterSpacing = 1.sp,
-                            color = Color(0xFF3A3A44),
+                            color = InkFaint,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { showAll = true }
@@ -197,7 +232,7 @@ private fun Home() {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("type a name", color = Color(0xFF3A3A44)) },
+                    placeholder = { Text("type a name", color = InkFaint) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     modifier = Modifier.fillMaxWidth()
@@ -207,7 +242,7 @@ private fun Home() {
                     if (query.isBlank()) allApps
                     else allApps.filter { it.label.contains(query, ignoreCase = true) }
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     items(filtered, key = { it.packageName }) { app ->
                         AppRow(app.label) {
                             AppList.launch(context, app.packageName)
@@ -221,16 +256,129 @@ private fun Home() {
     }
 }
 
+/** Today, as a short list. The point is to answer "what is next" without opening anything. */
+@Composable
+private fun Agenda(events: List<CalEvent>) {
+    val context = LocalContext.current
+    val now = System.currentTimeMillis()
+    val fmt = DateTimeFormatter.ofPattern("H:mm")
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        events.forEach { event ->
+            val running = event.begin <= now && event.end > now
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { openEvent(context, event) }
+            ) {
+                Box(
+                    Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (running) Accent else InkFaint)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    fmt.format(Instant.ofEpochMilli(event.begin).atZone(ZoneId.systemDefault())),
+                    fontSize = 14.sp,
+                    color = if (running) Accent else InkDim,
+                    fontWeight = if (running) FontWeight.Medium else FontWeight.Normal,
+                    modifier = Modifier.width(52.dp)
+                )
+                Text(
+                    event.title,
+                    fontSize = 14.sp,
+                    color = if (running) InkBright else InkDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeRow(entry: HomeEntry, expanded: Boolean, onToggle: () -> Unit) {
+    val context = LocalContext.current
+
+    if (!entry.isFolder) {
+        val pkg = entry.packageName ?: return
+        if (!AppList.isInstalled(context, pkg)) return
+        AppRow(AppList.label(context, pkg)) { AppList.launch(context, pkg) }
+        return
+    }
+
+    val contents = remember(entry.packages) {
+        entry.packages.filter { AppList.isInstalled(context, it) }
+    }
+    if (contents.isEmpty()) return
+
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(vertical = 11.dp)
+        ) {
+            Text(
+                entry.folderName,
+                fontSize = 22.sp,
+                color = if (expanded) InkBright else Ink
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                if (expanded) "−" else "${contents.size}",
+                fontSize = 13.sp,
+                color = InkFaint
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(Modifier.padding(start = 18.dp, bottom = 8.dp)) {
+                contents.forEach { pkg ->
+                    Text(
+                        AppList.label(context, pkg),
+                        fontSize = 19.sp,
+                        color = InkDim,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { AppList.launch(context, pkg) }
+                            .padding(vertical = 9.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AppRow(label: String, onClick: () -> Unit) {
     Text(
         text = label,
         fontSize = 22.sp,
-        color = Color(0xFFD8D4CC),
-        textAlign = TextAlign.Start,
+        color = Ink,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 11.dp)
     )
+}
+
+private fun openApp(context: Context, showDigest: Boolean = false) {
+    context.startActivity(
+        Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(DigestPublisher.EXTRA_SHOW_DIGEST, showDigest)
+    )
+}
+
+private fun openEvent(context: Context, event: CalEvent) {
+    val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId)
+    val intent = Intent(Intent.ACTION_VIEW)
+        .setData(uri)
+        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.begin)
+        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.end)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
 }

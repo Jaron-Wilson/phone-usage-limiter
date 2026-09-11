@@ -14,6 +14,8 @@ data class Verdict(
     val allow: Boolean,
     val reason: String,
     val vip: Boolean = false,
+    /** A rule marked this as something that breaks through any mode. */
+    val breaksThrough: Boolean = false,
     /** True when the notification must never be touched at all. */
     val exempt: Boolean = false
 )
@@ -91,9 +93,23 @@ object Classifier {
         }
     }
 
-    fun classify(sbn: StatusBarNotification, read: NotifText, policy: PolicySnapshot): NotifClass {
-        if (read.category == Notification.CATEGORY_CALL) return NotifClass.CALL
-        if (read.category == Notification.CATEGORY_MISSED_CALL) return NotifClass.CALL
+    /** The class, plus whether the rule that decided it overrides the mode. */
+    data class Classification(val notifClass: NotifClass, val breaksThrough: Boolean)
+
+    fun classify(sbn: StatusBarNotification, read: NotifText, policy: PolicySnapshot): NotifClass =
+        classifyDetailed(sbn, read, policy).notifClass
+
+    fun classifyDetailed(
+        sbn: StatusBarNotification,
+        read: NotifText,
+        policy: PolicySnapshot
+    ): Classification {
+        if (read.category == Notification.CATEGORY_CALL) {
+            return Classification(NotifClass.CALL, breaksThrough = true)
+        }
+        if (read.category == Notification.CATEGORY_MISSED_CALL) {
+            return Classification(NotifClass.CALL, breaksThrough = true)
+        }
 
         // Explicit rules win. They are sorted by priority already.
         for ((rule, regex) in policy.compiledRules) {
@@ -105,20 +121,23 @@ object Classifier {
                 MatchField.PACKAGE -> sbn.packageName
                 MatchField.ANY -> read.all
             }
-            if (haystack.isNotEmpty() && regex.containsMatchIn(haystack)) return rule.target
+            if (haystack.isNotEmpty() && regex.containsMatchIn(haystack)) {
+                return Classification(rule.target, rule.alwaysThrough)
+            }
         }
 
         // A notification you can type a reply into is, by construction, someone
         // talking to you. This is what catches Instagram DMs, which have no
         // distinguishing wording.
-        if (read.hasReplyAction) return NotifClass.DIRECT
+        if (read.hasReplyAction) return Classification(NotifClass.DIRECT, false)
         if (read.category == Notification.CATEGORY_MESSAGE && read.isConversation) {
-            return NotifClass.DIRECT
+            return Classification(NotifClass.DIRECT, false)
         }
 
-        return PACKAGE_DEFAULT_CLASS[sbn.packageName]
-            ?: if (read.category == Notification.CATEGORY_EMAIL) NotifClass.OTHER
-            else NotifClass.OTHER
+        return Classification(
+            PACKAGE_DEFAULT_CLASS[sbn.packageName] ?: NotifClass.OTHER,
+            breaksThrough = false
+        )
     }
 
     fun decide(
@@ -134,11 +153,18 @@ object Classifier {
             return Verdict(NotifClass.OTHER, allow = true, reason = "Gate off", exempt = true)
         }
 
-        val cls = classify(sbn, read, policy)
+        val (cls, breaksThrough) = classifyDetailed(sbn, read, policy)
         val mode = policy.mode
 
         if (cls == NotifClass.CALL) {
-            return Verdict(cls, allow = true, reason = "Calls always come through")
+            return Verdict(cls, allow = true, reason = "Calls always come through", breaksThrough = true)
+        }
+        if (breaksThrough) {
+            return Verdict(
+                cls, allow = true,
+                reason = "Too important to hold",
+                breaksThrough = true
+            )
         }
 
         val vip = policy.compiledVips.any { it.containsMatchIn(read.title) }
@@ -149,7 +175,10 @@ object Classifier {
         if (sbn.packageName in mode.blockedPackages) {
             return Verdict(cls, allow = false, reason = "${mode.name} holds this app", vip = vip)
         }
-        if (sbn.packageName in mode.allowedPackages) {
+        // An app you allowed still does not get to advertise at you. Without
+        // this, putting your bank on the allow list would also let through
+        // "introducing our new credit card".
+        if (sbn.packageName in mode.allowedPackages && cls != NotifClass.PROMO) {
             return Verdict(cls, allow = true, reason = "${mode.name} allows this app", vip = vip)
         }
         if (cls in mode.allowedClasses) {

@@ -7,7 +7,6 @@ import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import dev.jaronwilson.modes.AppGraph
-import dev.jaronwilson.modes.core.Pkg
 import dev.jaronwilson.modes.core.model.AppPass
 import dev.jaronwilson.modes.core.model.GuardMode
 import kotlinx.coroutines.launch
@@ -41,15 +40,18 @@ class AppGuardService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        if (pkg == packageName) return
-        if (pkg in NEVER_GUARD) return
-        if (pkg in Pkg.ESSENTIAL) return
-
         val policy = AppGraph.repo.snapshot ?: return
         if (!policy.guardEnabled) return
         val mode = policy.mode
         if (mode.guardMode == GuardMode.OFF) return
-        if (pkg !in mode.blockedPackages) return
+        if (!GuardPolicy.shouldGuard(
+                pkg = pkg,
+                ownPackage = packageName,
+                mode = mode,
+                homePackages = policy.homePackages,
+                isLaunchable = ::isLaunchable
+            )
+        ) return
 
         val now = System.currentTimeMillis()
         // Window state changes fire several times as an app opens.
@@ -84,6 +86,10 @@ class AppGuardService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    private fun isLaunchable(pkg: String): Boolean = runCatching {
+        packageManager.getLaunchIntentForPackage(pkg) != null
+    }.getOrDefault(false)
+
     companion object {
         private const val TAG = "AppGuard"
         private const val DEBOUNCE_MS = 1500L
@@ -94,18 +100,6 @@ class AppGuardService : AccessibilityService() {
 
         /** Package -> when its pass expires. Mirrors the database for speed. */
         val passes = ConcurrentHashMap<String, Long>()
-
-        /** Guarding these would make the phone unusable or unrecoverable. */
-        private val NEVER_GUARD = setOf(
-            "com.android.systemui",
-            "com.google.android.permissioncontroller",
-            "com.android.permissioncontroller",
-            "com.android.settings",
-            "com.google.android.packageinstaller",
-            "com.android.packageinstaller",
-            "com.google.android.apps.nexuslauncher",
-            "com.android.launcher3"
-        )
 
         suspend fun grantPass(pkg: String, modeId: String, minutes: Int) {
             val expires = System.currentTimeMillis() + minutes * 60_000L

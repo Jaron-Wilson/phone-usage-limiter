@@ -20,22 +20,106 @@ Four moving parts:
 |---|---|---|
 | Mode engine | Picks the current mode from your calendar and a time schedule | No |
 | Notification gate | A `NotificationListenerService` that holds the noise and batches it | No |
-| Minimal home screen | A text-only launcher showing only the current mode's apps | Yes |
-| App guard | An `AccessibilityService` that puts a pause in front of apps you set aside | Yes |
+| Minimal home screen | A text-only launcher: today's calendar, then the mode's apps in folders | Yes |
+| App guard | An `AccessibilityService` that stops you opening what the mode is not for | Yes |
 
 The last two are genuinely optional. Skip them and everything else still works.
 
 ## Five modes ship with it
 
-| Mode | Gets through | Home screen | Delivery |
-|---|---|---|---|
-| Open | everything | your usual apps | immediately |
-| Work | calls, DMs, mentions | work apps | 12:30 and 17:00 |
-| Deep focus | calls only | four apps, screen greyscale | when the mode ends |
-| Personal | calls, DMs, mentions, stories | social and camera | every 90 minutes |
-| Sleep | calls from starred contacts only | clock, phone, messages | 07:30 |
+| Mode | Gets through | Home screen | Guard | Delivery |
+|---|---|---|---|---|
+| Open | everything | everything, in folders | off | immediately |
+| Work | calls, DMs, mentions, money | Work, Everyday, Money | allowlist, pause | 12:30 and 17:00 |
+| Deep focus | calls and fraud alerts only | Tools, Money, greyscale | allowlist, sent home | when the mode ends |
+| Personal | calls, DMs, mentions, stories, money | Everyday, Money, Social | blocklist, pause | every 90 minutes |
+| Sleep | calls from starred contacts, fraud alerts | clock, phone, messages, Money | allowlist, pause | 07:30 |
 
 Edit any of them in the app. Nothing here is hardcoded.
+
+## The home screen is the allowlist
+
+Each mode's home screen is a list of rows. A row is either a single app or a
+named folder:
+
+```
+9:41
+Thursday 11 September
+◑ Work   Sprint planning
+
+ ● 10:00  Sprint planning
+ ○ 11:30  1:1
+ ○ 14:00  Design review
+
+Phone
+Messages
+Calendar
+Work        4
+Everyday    3
+Money       9
+
+everything else
+```
+
+Tap a folder to expand it in place. Apps you reach for constantly sit at the top
+level, because a folder you open twenty times a day is just friction.
+
+**When a mode's guard is set to allowlist, this screen is also its permission
+list.** Anything not reachable from it gets stopped. That is what answers the
+awkward case: an app you installed last week, or one a link opened, was never
+put in a folder, so the mode will not let you sit in it. You do not have to
+predict what will distract you, which is the thing a blocklist gets wrong.
+
+Each mode picks its own scope, under "If you reach for one anyway":
+
+- **Only apps I set aside** (blocklist) - loose. Anything new is allowed.
+- **Anything not on my home screen** (allowlist) - strict. Anything new is not.
+
+These are never stopped under any setting, so you cannot lock yourself out:
+Phone, Messages, Contacts, Clock, Settings, the authenticator, the system UI,
+the permission controller, the installer, the keyboard, and every money app.
+
+## Money
+
+Banking, cards and payments are treated as their own class, `FINANCE`:
+
+- **Their notifications are allowed in Open, Work and Personal.**
+- **Fraud alerts break through every mode, including Sleep and Deep focus.**
+  So do one-time passcodes. Anything matching fraud, suspicious activity, a
+  declined card, a locked account or an overdraft is marked `alwaysThrough` and
+  ignores the mode entirely.
+- **Ordinary transactions are ordinary.** "You paid $4.50" is held in Deep focus
+  and Sleep and arrives with the batch.
+- **Money apps are never guarded,** even in Deep focus, and even if you put one
+  on a blocklist by accident. A fraud alert you cannot act on is worse than the
+  distraction.
+- **Allowing an app does not let it advertise at you.** A bank on the allow list
+  still gets its "introducing our new credit card" held, because the promo rules
+  are checked first.
+
+The shipped list covers the common US apps (Chase, BofA, Wells Fargo, Capital
+One, Citi, Ally, Discover, Amex, USAA, PayPal, Venmo, Cash App, Zelle,
+Robinhood, Fidelity, Schwab, Chime, SoFi, Credit Karma, Google Wallet). Yours
+may differ, which is what the next section is for.
+
+## Seeing what is actually installed
+
+Package names are the one thing you cannot guess from a desktop, and the shipped
+defaults are educated guesses about a phone nobody has seen.
+
+```bash
+./tools/pull-apps.sh            # every app, name and package, as a table
+./tools/pull-apps.sh --kotlin   # constants to paste into Defaults.kt
+./tools/pull-apps.sh --json     # machine readable
+./tools/pull-apps.sh --layout   # your home screens as they stand right now
+```
+
+It triggers an export inside the app over adb and pulls the result, so you get
+real app names rather than bare package names. With the app not yet installed it
+falls back to `pm list packages -3`, which gives packages only.
+
+Nothing here is required: the folder editor in the app lists every installed app
+with a search box. The script is for planning on a big screen.
 
 ## How the mode gets chosen
 
@@ -61,7 +145,8 @@ safety net, and a broadcast when the calendar provider changes underneath you.
 
 Every notification is sorted into one class:
 
-`CALL`, `DIRECT`, `MENTION`, `STORY`, `SOCIAL`, `PROMO`, `SYSTEM`, `OTHER`
+`CALL`, `DIRECT`, `MENTION`, `STORY`, `SOCIAL`, `FINANCE`, `PROMO`, `SYSTEM`,
+`OTHER`
 
 A mode names the classes that ring through. Everything else is held.
 
@@ -74,7 +159,10 @@ notification later comes out of snooze, the gate recognises it and takes the
 stand-in down. You get one batch, at a time you chose, with nothing lost.
 
 Some things are never touched at all: alarms, calls, navigation, media
-transports, and anything ongoing.
+transports, and anything ongoing. A rule can also be marked **always through**,
+which overrides the mode completely. That is reserved for the short list of
+things that are never noise: incoming calls, one-time passcodes, and fraud
+alerts.
 
 ### Instagram, honestly
 
@@ -168,6 +256,10 @@ out here.
 8. **Turn on Instagram notifications for the few people whose stories you
    actually want.** See above.
 
+9. **Check your folders against reality.** Run `./tools/pull-apps.sh`, then edit
+   each mode's home screen in the app. The shipped folders reference apps you
+   may not have, and under allowlist an app in no folder is one you cannot open.
+
 ## Greyscale
 
 Deep focus and Sleep turn the screen greyscale and dim the wallpaper. Colour is
@@ -183,7 +275,8 @@ degrades quietly rather than crashing.
 
 ```
 core/model/Models.kt      every entity and enum, start here
-core/Defaults.kt          the five modes, the schedule, the Instagram rules
+core/Defaults.kt          the five modes, home folders, schedule, Instagram
+                          and money rules
 core/repo/ModeRepository  the cached PolicySnapshot the gate reads
 schedule/ScheduleResolver which mode should be running, and when that changes
 schedule/ModeScheduler    alarms, the periodic worker, digest windows
@@ -192,8 +285,10 @@ apply/ModeApplier         turns a decision into actual phone behaviour
 notify/Classifier         what a notification is, and whether it gets through
 notify/NotificationGate   the listener service
 notify/DigestPublisher    batching and release
+guard/GuardPolicy         whether an app may be opened, pure and well tested
 guard/AppGuardService     the foreground app watcher
-launcher/LauncherActivity the minimal home screen
+launcher/LauncherActivity the minimal home screen, agenda and folders
+tools/ExportReceiver      dumps the installed app list for tools/pull-apps.sh
 ui/                       Compose settings, four tabs
 ```
 
@@ -215,15 +310,31 @@ than touching the database. If you add anything the gate needs, add it there.
   `PendingIntent` and actions are reused. Those are kept in memory, so if the
   listener service is restarted while something is held, that item degrades to
   plain text.
-- **The app guard only acts on a mode's blocklist,** never on "anything not on
-  the home screen". Guarding by omission would trap you out of apps you never
-  thought to list. Settings, Phone, Messages, Contacts, Clock, the system UI and
-  the permission controller are never guarded, so there is always a way out.
-- **Database migrations are destructive** (`fallbackToDestructiveMigration`).
-  Fine while iterating. Change it before you have settings worth keeping.
+- **Allowlist mode is strict on purpose,** and the escape hatches are what make
+  it safe. Read `GuardPolicy.NEVER_GUARD` and `Pkg.ESSENTIAL` before changing
+  anything there. `GuardPolicyTest` asserts every one of them stays reachable.
+- **The guard reacts to a window change,** so it stops you a moment after the
+  app draws rather than before. It is a pause, not a lock, and a determined
+  thumb can still get through by turning the service off in Settings. That is
+  deliberate: a tool you cannot escape is one you will uninstall.
+- **Database migrations are destructive** (`fallbackToDestructiveMigration`),
+  and the schema is at version 2. Upgrading from the first build resets your
+  modes and folders to the defaults. Fine while iterating. Change it before you
+  have settings worth keeping.
 
 ## Tests
 
-`app/src/test/` covers the two pieces most likely to be subtly wrong and hardest
-to debug on a phone: schedule windows that cross midnight, and digest window
-maths. Run them before trusting a change to either.
+`app/src/test/` covers the three pieces most likely to be subtly wrong and
+hardest to debug on a phone:
+
+- **`ScheduleTest`** - schedule windows that cross midnight, and digest maths.
+- **`GuardPolicyTest`** - which apps a mode will and will not open, including an
+  assertion that every essential and every money app stays reachable in the
+  strictest mode. If you change the guard, this is the file that stops you
+  locking yourself out.
+
+```bash
+./gradlew :app:testDebugUnitTest
+```
+
+32 tests, all passing.

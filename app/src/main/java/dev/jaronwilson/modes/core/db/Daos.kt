@@ -9,6 +9,7 @@ import androidx.room.Upsert
 import dev.jaronwilson.modes.core.model.AppPass
 import dev.jaronwilson.modes.core.model.CalendarRule
 import dev.jaronwilson.modes.core.model.HeldNotification
+import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.TimeRule
@@ -133,6 +134,33 @@ interface HeldDao {
 
     @Query("DELETE FROM held WHERE key = :key")
     suspend fun deleteByKey(key: String)
+}
+
+@Dao
+interface HomeDao {
+    @Query("SELECT * FROM home_entries ORDER BY modeId, sortOrder")
+    fun observeAll(): Flow<List<HomeEntry>>
+
+    @Query("SELECT * FROM home_entries WHERE modeId = :modeId ORDER BY sortOrder")
+    fun observeForMode(modeId: String): Flow<List<HomeEntry>>
+
+    @Query("SELECT * FROM home_entries WHERE modeId = :modeId ORDER BY sortOrder")
+    suspend fun forMode(modeId: String): List<HomeEntry>
+
+    @Upsert
+    suspend fun upsert(entry: HomeEntry)
+
+    @Upsert
+    suspend fun upsertAll(entries: List<HomeEntry>)
+
+    @Delete
+    suspend fun delete(entry: HomeEntry)
+
+    @Query("DELETE FROM home_entries WHERE modeId = :modeId")
+    suspend fun clearMode(modeId: String)
+
+    @Query("SELECT COUNT(*) FROM home_entries")
+    suspend fun count(): Int
 }
 
 @Dao

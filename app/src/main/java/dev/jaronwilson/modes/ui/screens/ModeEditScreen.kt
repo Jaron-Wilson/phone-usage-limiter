@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.GuardMode
+import dev.jaronwilson.modes.core.model.GuardScope
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifClass
 import dev.jaronwilson.modes.launcher.AppList
@@ -37,7 +38,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ModeEditScreen(modeId: String, onDone: () -> Unit) {
+fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf<Mode?>(null) }
@@ -129,26 +130,12 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit) {
             SectionHeader("Home screen")
             Panel {
                 Text(
-                    "Shown, in order, when Modes Home is your launcher.",
+                    "Folders, order, and what this mode is for.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    apps.take(60).forEach { app ->
-                        val on = app.packageName in current.homeApps
-                        FilterChip(
-                            selected = on,
-                            onClick = {
-                                update { m ->
-                                    m.copy(
-                                        homeApps = if (on) m.homeApps - app.packageName
-                                        else m.homeApps + app.packageName
-                                    )
-                                }
-                            },
-                            label = { Text(app.label) }
-                        )
-                    }
+                Button(onClick = onEditHome, modifier = Modifier.fillMaxWidth()) {
+                    Text("Arrange home screen and folders")
                 }
             }
 
@@ -171,6 +158,39 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit) {
                         )
                     }
                 }
+                Text(
+                    "What counts as \"one anyway\":",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GuardScope.entries.forEach { scopeOption ->
+                        FilterChip(
+                            selected = current.guardScope == scopeOption,
+                            onClick = { update { it.copy(guardScope = scopeOption) } },
+                            label = {
+                                Text(
+                                    when (scopeOption) {
+                                        GuardScope.BLOCKLIST -> "Only apps I set aside"
+                                        GuardScope.ALLOWLIST -> "Anything not on my home screen"
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+                Text(
+                    if (current.guardScope == GuardScope.ALLOWLIST) {
+                        "Strict. An app you install next week is off-limits until you " +
+                            "put it on this mode's home screen. Phone, Messages, Clock, " +
+                            "Settings and your money apps are never stopped."
+                    } else {
+                        "Loose. Only the apps listed above are stopped, so anything new " +
+                            "is allowed by default."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
                 NumberRow("Pause length, seconds", current.speedbumpSeconds) { v ->
                     update { it.copy(speedbumpSeconds = v) }
                 }

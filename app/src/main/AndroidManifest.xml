@@ -108,6 +108,16 @@
             android:name=".notify.DigestActionReceiver"
             android:exported="false" />
 
+        <!-- Triggered over adb by tools/pull-apps.sh. Writes a list of installed
+             apps to this app's own files directory and nothing else. -->
+        <receiver
+            android:name=".tools.ExportReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.jaronwilson.modes.EXPORT_APPS" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".schedule.BootReceiver"
             android:exported="true">

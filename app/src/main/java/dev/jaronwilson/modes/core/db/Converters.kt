@@ -2,6 +2,7 @@ package dev.jaronwilson.modes.core.db
 
 import androidx.room.TypeConverter
 import dev.jaronwilson.modes.core.model.GuardMode
+import dev.jaronwilson.modes.core.model.GuardScope
 import dev.jaronwilson.modes.core.model.MatchField
 import dev.jaronwilson.modes.core.model.NotifClass
 
@@ -55,6 +56,13 @@ class Converters {
     @TypeConverter
     fun dbToGuard(value: String): GuardMode =
         runCatching { GuardMode.valueOf(value) }.getOrDefault(GuardMode.OFF)
+
+    @TypeConverter
+    fun scopeToDb(value: GuardScope): String = value.name
+
+    @TypeConverter
+    fun dbToScope(value: String): GuardScope =
+        runCatching { GuardScope.valueOf(value) }.getOrDefault(GuardScope.BLOCKLIST)
 
     @TypeConverter
     fun fieldToDb(value: MatchField): String = value.name
