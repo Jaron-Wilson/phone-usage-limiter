@@ -63,6 +63,12 @@ object AppListExport {
                             "type=${c.accountType}  visible=${c.visible}  syncEvents=${c.syncEvents}"
                     )
                 }
+                if (cals.isEmpty()) {
+                    appendLine(
+                        "    (empty store: an account can report sync as enabled while a " +
+                            "second flag blocks the adapter. Now > Today > Repair calendar sync.)"
+                    )
+                }
                 val now = System.currentTimeMillis()
                 val soon = cal.events(now - 60 * 60_000L, now + 24 * 60 * 60_000L)
                 appendLine("events in the next 24h: ${soon.size}")

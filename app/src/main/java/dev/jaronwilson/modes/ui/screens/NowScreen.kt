@@ -36,8 +36,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.jaronwilson.modes.AppGraph
+import dev.jaronwilson.modes.BuildConfig
 import dev.jaronwilson.modes.core.repo.SettingsStore
 import dev.jaronwilson.modes.notify.DigestPublisher
+import dev.jaronwilson.modes.tools.CalendarSyncFixer
 import dev.jaronwilson.modes.tools.ShareDump
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.Perms
@@ -59,6 +61,18 @@ fun NowScreen(onOpenModes: () -> Unit) {
     val active by AppGraph.repo.settings.active.collectAsState(initial = SettingsStore.ActiveState())
     val held by AppGraph.repo.heldDao.observePendingCount().collectAsState(initial = 0)
     val manual by AppGraph.repo.settings.manualOverride.collectAsState(initial = null to 0L)
+
+    var syncFixMessage by remember { mutableStateOf("") }
+    val accountPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val account = CalendarSyncFixer.accountFromResult(result.data)
+        syncFixMessage = if (account == null) {
+            "No account chosen."
+        } else {
+            CalendarSyncFixer.describe(CalendarSyncFixer.fix(account))
+        }
+    }
 
     var permsTick by remember { mutableStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { permsTick++ }
@@ -148,6 +162,12 @@ fun NowScreen(onOpenModes: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        versionLine(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -227,13 +247,45 @@ fun NowScreen(onOpenModes: () -> Unit) {
                     )
                     calendarCount == 0 -> {
                         Text(
-                            "No calendar is synced to this phone, so there is nothing to " +
-                                "read. If your events are in Google Calendar, turn on Calendar " +
-                                "under that account's sync settings. If they are in Outlook, turn " +
-                                "on \"Sync calendars\" in Outlook's account settings.",
+                            "Nothing has reached this phone's shared calendar store, so " +
+                                "there is nothing to read. Every calendar app on Android " +
+                                "reads that store; Google Calendar also keeps a private copy " +
+                                "of your events, which is why it can look perfectly fine " +
+                                "while the store is empty. Its sync adapter is declining to " +
+                                "fill it, and current builds have no switch for that.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "What usually shifts it, in order of how much they disturb: " +
+                                "clear Google Calendar's app data (events are all on Google's " +
+                                "servers, so nothing is lost), then clear Calendar Storage, " +
+                                "then remove and re-add the account.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                runCatching { accountPicker.launch(CalendarSyncFixer.chooseAccountIntent()) }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Repair calendar sync") }
+                        Text(
+                            "Pick the account your events live in. Choosing it is what lets " +
+                                "Modes turn its calendar sync back on; it gets no other access.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (syncFixMessage.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                syncFixMessage,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         OutlinedButton(
                             onClick = {
                                 runCatching {
@@ -243,7 +295,7 @@ fun NowScreen(onOpenModes: () -> Unit) {
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Open account sync settings") }
+                        ) { Text("Open account sync settings instead") }
                     }
                     events.isEmpty() -> Text(
                         "Nothing more on the calendar today." +
@@ -299,6 +351,17 @@ fun NowScreen(onOpenModes: () -> Unit) {
                 }
             }
 
+            SectionHeader("Version")
+            Panel {
+                Text(versionLine(), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Check this against the release you meant to install. Android will " +
+                        "refuse an upgrade whose build number has not gone up.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             SectionHeader("Permissions")
             Panel {
                 perms.forEach { item ->
@@ -333,4 +396,14 @@ internal fun describeDigest(times: List<Int>, everyMinutes: Int): String = when 
         "%02d:%02d".format(it / 60, it % 60)
     }
     else -> "Delivered when this mode ends"
+}
+
+/** e.g. "Modes 0.1.9, build 10, release". */
+internal fun versionLine(): String = buildString {
+    append("Modes ")
+    append(BuildConfig.VERSION_NAME)
+    append(", build ")
+    append(BuildConfig.VERSION_CODE)
+    append(", ")
+    append(BuildConfig.BUILD_TYPE)
 }
