@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.jaronwilson.modes.commute.Destination
+import dev.jaronwilson.modes.commute.Destinations
 import dev.jaronwilson.modes.core.Defaults
 import dev.jaronwilson.modes.core.model.ModeSource
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +41,7 @@ class SettingsStore(private val context: Context) {
         val GET_READY = longPreferencesKey("get_ready_minutes")
         val DEFAULT_TRAVEL = longPreferencesKey("default_travel_minutes")
         val COMMUTE_ENABLED = booleanPreferencesKey("commute_enabled")
+        val DESTINATIONS = stringPreferencesKey("destinations")
     }
 
     data class ActiveState(
@@ -131,6 +134,14 @@ class SettingsStore(private val context: Context) {
 
     val homeAddress: Flow<String> = context.dataStore.data.map { it[K.HOME_ADDRESS].orEmpty() }
     suspend fun setHomeAddress(v: String) = edit { it[K.HOME_ADDRESS] = v }
+
+    /** Places worth one tap from the home screen. */
+    val destinations: Flow<List<Destination>> = context.dataStore.data.map {
+        Destinations.decode(it[K.DESTINATIONS].orEmpty())
+    }
+
+    suspend fun setDestinations(list: List<Destination>) =
+        edit { it[K.DESTINATIONS] = Destinations.encode(list) }
 
     /** Minutes you want to be there before it starts: parking, walking, settling. */
     val arriveEarlyMinutes: Flow<Long> = context.dataStore.data.map { it[K.ARRIVE_EARLY] ?: 10L }

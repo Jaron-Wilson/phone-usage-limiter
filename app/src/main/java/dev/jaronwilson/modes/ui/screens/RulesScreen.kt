@@ -31,6 +31,8 @@ import dev.jaronwilson.modes.core.repo.SettingsStore
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
 import dev.jaronwilson.modes.commute.CommuteScheduler
+import dev.jaronwilson.modes.commute.Destination
+import dev.jaronwilson.modes.commute.Destinations
 import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.ui.AppIcon
 import dev.jaronwilson.modes.ui.Panel
@@ -157,6 +159,81 @@ fun RulesScreen() {
                         )
                     }
                 }
+            }
+
+            SectionHeader("Places worth one tap")
+            Panel {
+                Text(
+                    "Starts directions straight away, no searching. Google Maps keeps " +
+                        "its own Home and Work and gives no way to read them, so type " +
+                        "each once here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                val places by AppGraph.repo.settings.destinations.collectAsState(initial = emptyList())
+                places.forEach { place ->
+                    RowItem(
+                        title = place.label,
+                        subtitle = place.query,
+                        trailing = {
+                            Row {
+                                TextButton(onClick = {
+                                    runCatching {
+                                        context.startActivity(
+                                            CommuteScheduler.navigationIntentAnyApp(place.query)
+                                        )
+                                    }
+                                }) { Text("Test") }
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        AppGraph.repo.settings.setDestinations(
+                                            Destinations.remove(places, place.label)
+                                        )
+                                    }
+                                }) { Text("Remove") }
+                            }
+                        }
+                    )
+                }
+                var label by remember { mutableStateOf("") }
+                var address by remember { mutableStateOf("") }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Destinations.SUGGESTED.filter { s -> places.none { it.label.equals(s, true) } }
+                        .forEach { suggestion ->
+                            FilterChip(
+                                selected = label == suggestion,
+                                onClick = { label = suggestion },
+                                label = { Text(suggestion) }
+                            )
+                        }
+                }
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text("Name, e.g. School") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text("Address, or whatever you would search for") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    enabled = label.isNotBlank() && address.isNotBlank(),
+                    onClick = {
+                        scope.launch {
+                            AppGraph.repo.settings.setDestinations(
+                                Destinations.upsert(places, Destination(label.trim(), address.trim()))
+                            )
+                        }
+                        label = ""
+                        address = ""
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Add") }
             }
 
             SectionHeader("Leaving on time")

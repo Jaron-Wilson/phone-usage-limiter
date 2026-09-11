@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.EventKind
+import dev.jaronwilson.modes.commute.CommuteScheduler
 import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.repo.Stats
@@ -162,6 +163,7 @@ private fun Home() {
 
     // Refreshed on its own clock: the calendar changes far less often than the
     // minute does, and querying the provider is not free.
+    val places by AppGraph.repo.settings.destinations.collectAsState(initial = emptyList())
     val highlightPattern by AppGraph.repo.settings.agendaHighlight
         .collectAsState(initial = dev.jaronwilson.modes.core.repo.SettingsStore.DEFAULT_HIGHLIGHT)
     val highlight = remember(highlightPattern) {

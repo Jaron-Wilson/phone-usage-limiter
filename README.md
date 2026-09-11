@@ -98,6 +98,7 @@ Thursday 11 September
 ◑ Work   Sprint planning
 
 alarm   6:30 tomorrow
+drive   Home · Work · School
 
 NOW
 Sprint planning
@@ -119,6 +120,16 @@ Money       9
 
 everything else
 ```
+
+One tap on a place under **drive** starts directions to it. Google Maps keeps
+its own Home and Work and offers no way to read them, so these are yours, typed
+once under Rules.
+
+An app *could* instead drive the Maps interface through an accessibility
+service and press its buttons for you. That would mean granting a service the
+right to read everything on every screen, forever, to save typing an address
+once, and it would break on the next Maps redesign. The navigation intent does
+the same job and cannot.
 
 The next alarm is the system's own, the same one in the status bar, so it
 includes timers other apps set. It turns gold within the hour, and tapping
@@ -580,6 +591,8 @@ apply/ModeApplier         turns a decision into actual phone behaviour
 notify/Classifier         what a notification is, and whether it gets through
 notify/NotificationGate   the listener service
 notify/DigestPublisher    batching and release
+commute/Commute           when to leave, as arithmetic
+commute/Destinations      places worth one tap
 guard/GuardPolicy         whether an app may be opened, pure and well tested
 guard/AppGuardService     the foreground app watcher
 launcher/LauncherActivity the minimal home screen, agenda and folders
@@ -665,5 +678,6 @@ hardest to debug on a phone:
 - **`AgendaDayTest`** - which day an event belongs to, all-day events included.
 - **`CommuteTest`** - working backwards to the moment you have to leave.
 - **`DuplicateRowsTest`** - repairing a home screen that seeded itself twice.
+- **`DestinationsTest`** - storing places without mangling an address.
 
-81 tests, all passing.
+90 tests, all passing.
