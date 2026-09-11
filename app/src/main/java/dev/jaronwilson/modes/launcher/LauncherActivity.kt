@@ -69,6 +69,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.JulianFields
 
 private val Ink = Color(0xFFD8D4CC)
 private val InkBright = Color(0xFFE8E4DC)
@@ -152,6 +153,12 @@ private fun Home() {
 
     // Refreshed on its own clock: the calendar changes far less often than the
     // minute does, and querying the provider is not free.
+    val highlightPattern by AppGraph.repo.settings.agendaHighlight
+        .collectAsState(initial = dev.jaronwilson.modes.core.repo.SettingsStore.DEFAULT_HIGHLIGHT)
+    val highlight = remember(highlightPattern) {
+        runCatching { Regex(highlightPattern) }.getOrNull()
+    }
+
     val events by produceState(initialValue = emptyList<CalEvent>()) {
         while (true) {
             val now = System.currentTimeMillis()
@@ -230,7 +237,7 @@ private fun Home() {
 
             if (!showAll) {
                 Spacer(Modifier.height(24.dp))
-                Agenda(events, calendarState)
+                Agenda(events, calendarState, highlight)
             }
 
             Spacer(Modifier.height(28.dp))
@@ -303,18 +310,20 @@ private enum class CalendarState { OK, NO_PERMISSION, NO_CALENDARS }
  * spans the whole day is worth seeing and is not what you are doing right now.
  */
 @Composable
-private fun Agenda(events: List<CalEvent>, state: CalendarState) {
+private fun Agenda(events: List<CalEvent>, state: CalendarState, highlight: Regex?) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val now = System.currentTimeMillis()
     val fmt = DateTimeFormatter.ofPattern("H:mm")
     fun t(ms: Long) = fmt.format(Instant.ofEpochMilli(ms).atZone(zone))
 
-    val startOfTomorrow = remember(events) {
-        LocalDate.now().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    // Bucket by the provider's own day numbers. Doing it by timestamp puts
+    // every all-day event on the wrong side of midnight west of Greenwich.
+    val todayJulian = remember(events) {
+        LocalDate.now().getLong(JulianFields.JULIAN_DAY).toInt()
     }
-    val today = events.filter { it.begin < startOfTomorrow }
-    val tomorrow = events.filter { it.begin >= startOfTomorrow }
+    val today = events.filter { it.occursOn(todayJulian) }
+    val tomorrow = events.filter { it.occursOn(todayJulian + 1) && !it.occursOn(todayJulian) }
 
     val current = today.firstOrNull { !it.allDay && it.begin <= now && it.end > now }
     val upcomingToday = today.filter { it.begin > now || (it.allDay && it.end > now) }
@@ -329,6 +338,9 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState) {
                     current.title,
                     fontSize = 26.sp,
                     color = InkBright,
+                    fontWeight = if (highlight?.containsMatchIn(current.title) == true) {
+                        FontWeight.Bold
+                    } else FontWeight.Normal,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable { openEvent(context, current) }
@@ -343,6 +355,9 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState) {
                     next.title,
                     fontSize = 26.sp,
                     color = InkBright,
+                    fontWeight = if (highlight?.containsMatchIn(next.title) == true) {
+                        FontWeight.Bold
+                    } else FontWeight.Normal,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable { openEvent(context, next) }
@@ -380,14 +395,14 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState) {
 
         if (restOfToday.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
-            EventList(restOfToday.take(4)) { openEvent(context, it) }
+            EventList(restOfToday.take(4), highlight) { openEvent(context, it) }
         }
 
         if (tomorrow.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Text("TOMORROW", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
             Spacer(Modifier.height(6.dp))
-            EventList(tomorrow.take(4)) { openEvent(context, it) }
+            EventList(tomorrow.take(4), highlight) { openEvent(context, it) }
             if (tomorrow.size > 4) {
                 Text(
                     "and ${tomorrow.size - 4} more",
@@ -401,7 +416,11 @@ private fun Agenda(events: List<CalEvent>, state: CalendarState) {
 }
 
 @Composable
-private fun EventList(events: List<CalEvent>, onClick: (CalEvent) -> Unit) {
+private fun EventList(
+    events: List<CalEvent>,
+    highlight: Regex?,
+    onClick: (CalEvent) -> Unit
+) {
     val zone = ZoneId.systemDefault()
     val fmt = DateTimeFormatter.ofPattern("H:mm")
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -412,19 +431,27 @@ private fun EventList(events: List<CalEvent>, onClick: (CalEvent) -> Unit) {
                     .fillMaxWidth()
                     .clickable { onClick(event) }
             ) {
-                Box(Modifier.size(4.dp).clip(CircleShape).background(InkFaint))
+                val marked = highlight?.containsMatchIn(event.title) == true
+                Box(
+                    Modifier
+                        .size(if (marked) 5.dp else 4.dp)
+                        .clip(CircleShape)
+                        .background(if (marked) Accent else InkFaint)
+                )
                 Spacer(Modifier.width(10.dp))
                 Text(
                     if (event.allDay) "all day"
                     else fmt.format(Instant.ofEpochMilli(event.begin).atZone(zone)),
                     fontSize = 14.sp,
-                    color = InkDim,
+                    color = if (marked) Ink else InkDim,
+                    fontWeight = if (marked) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier.width(56.dp)
                 )
                 Text(
                     event.title,
                     fontSize = 14.sp,
-                    color = InkDim,
+                    color = if (marked) InkBright else InkDim,
+                    fontWeight = if (marked) FontWeight.Bold else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

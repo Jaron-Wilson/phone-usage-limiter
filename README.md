@@ -94,7 +94,7 @@ until 11:00
 
 TOMORROW
  · 10:00    Standup
- · 13:00    Interview
+ · 13:00    Work            <- bold, because it matters
 
 Phone
 Messages
@@ -111,7 +111,16 @@ uses. Tomorrow is shown in a quieter weight below today, so the evening
 question of "what am I walking into" is answered without unlocking anything.
 All-day entries appear in the lists but are never promoted to the headline: a
 deadline spanning the whole day is worth seeing and is not what you are doing
-right now. Apps you reach for constantly sit at the top
+right now.
+
+Events whose title matches a pattern of yours are drawn bold with a marked
+dot. It defaults to anything containing "work", which is the shift you cannot
+afford to skim past; change it under Rules > Events worth noticing.
+
+Days are split using the calendar provider's own day numbers rather than
+timestamps. An all-day event is stored as UTC midnight to UTC midnight, so
+west of Greenwich an all-day Sunday event begins at 20:00 on Saturday and lands
+under the wrong heading if you bucket by milliseconds. Apps you reach for constantly sit at the top
 level, because a folder you open twenty times a day is just friction.
 
 **When a mode's guard is set to allowlist, this screen is also its permission

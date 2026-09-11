@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.NotifClass
+import dev.jaronwilson.modes.core.repo.SettingsStore
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
 import dev.jaronwilson.modes.ui.Panel
@@ -103,6 +104,38 @@ fun RulesScreen() {
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Add") }
+            }
+
+            SectionHeader("Events worth noticing")
+            Panel {
+                Text(
+                    "Events whose title matches this are drawn bold on the home " +
+                        "screen, with a marked dot. Default is anything containing " +
+                        "\"work\". A plain word is fine; it is matched as a regular " +
+                        "expression, ignoring case.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                val current by AppGraph.repo.settings.agendaHighlight
+                    .collectAsState(initial = SettingsStore.DEFAULT_HIGHLIGHT)
+                var draft by remember(current) { mutableStateOf(current) }
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    label = { Text("Highlight events matching") },
+                    singleLine = true,
+                    isError = runCatching { Regex(draft) }.isFailure,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    onClick = {
+                        if (runCatching { Regex(draft) }.isSuccess) {
+                            scope.launch { AppGraph.repo.settings.setAgendaHighlight(draft.trim()) }
+                        }
+                    },
+                    enabled = runCatching { Regex(draft) }.isSuccess,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Save") }
             }
 
             SectionHeader("From your calendar")

@@ -32,6 +32,7 @@ class SettingsStore(private val context: Context) {
         val SEEDED = booleanPreferencesKey("seeded")
         val SETUP_DONE = booleanPreferencesKey("setup_done")
         val LAST_DIGEST = longPreferencesKey("last_digest")
+        val AGENDA_HIGHLIGHT = stringPreferencesKey("agenda_highlight")
     }
 
     data class ActiveState(
@@ -95,6 +96,17 @@ class SettingsStore(private val context: Context) {
     val guardEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.GUARD_ENABLED] ?: true }
     suspend fun setGuardEnabled(v: Boolean) = edit { it[K.GUARD_ENABLED] = v }
 
+    /**
+     * Events whose title matches this are drawn bold on the home screen.
+     * Some things on a calendar you glance past; a shift you cannot miss is
+     * not one of them.
+     */
+    val agendaHighlight: Flow<String> = context.dataStore.data.map {
+        it[K.AGENDA_HIGHLIGHT] ?: DEFAULT_HIGHLIGHT
+    }
+
+    suspend fun setAgendaHighlight(v: String) = edit { it[K.AGENDA_HIGHLIGHT] = v }
+
     val setupDone: Flow<Boolean> = context.dataStore.data.map { it[K.SETUP_DONE] ?: false }
     suspend fun setSetupDone(v: Boolean) = edit { it[K.SETUP_DONE] = v }
 
@@ -106,6 +118,10 @@ class SettingsStore(private val context: Context) {
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
+    }
+
+    companion object {
+        const val DEFAULT_HIGHLIGHT = "(?i)\\bwork\\b"
     }
 
     private fun encodeMap(map: Map<String, String>): String =

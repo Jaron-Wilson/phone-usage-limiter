@@ -16,8 +16,23 @@ data class CalEvent(
     val begin: Long,
     val end: Long,
     val allDay: Boolean,
-    val busy: Boolean
-)
+    val busy: Boolean,
+    /**
+     * Julian day numbers of the first and last local day this instance touches,
+     * inclusive, straight from the provider.
+     *
+     * Not derivable from [begin] and [end]. An all-day event is stored as UTC
+     * midnight to UTC midnight, so an all-day Sunday event begins at 20:00 on
+     * Saturday in New York and lands on the wrong day if you bucket by
+     * milliseconds. The provider already did this arithmetic; use its answer.
+     */
+    val startDay: Int = 0,
+    val endDay: Int = 0
+) {
+    /** Whether this instance appears on the given local day. */
+    fun occursOn(julianDay: Int): Boolean =
+        if (startDay == 0 && endDay == 0) false else julianDay in startDay..endDay
+}
 
 data class CalendarInfo(
     val id: Long,
@@ -89,7 +104,9 @@ class CalendarSource(private val context: Context) {
             CalendarContract.Instances.AVAILABILITY,
             CalendarContract.Instances.SELF_ATTENDEE_STATUS,
             CalendarContract.Instances.STATUS,
-            CalendarContract.Instances.CALENDAR_DISPLAY_NAME
+            CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
+            CalendarContract.Instances.START_DAY,
+            CalendarContract.Instances.END_DAY
         )
         return runCatching {
             context.contentResolver.query(
@@ -110,7 +127,9 @@ class CalendarSource(private val context: Context) {
                                 begin = c.getLong(3),
                                 end = c.getLong(4),
                                 allDay = c.getInt(5) == 1,
-                                busy = c.getInt(6) == CalendarContract.Events.AVAILABILITY_BUSY
+                                busy = c.getInt(6) == CalendarContract.Events.AVAILABILITY_BUSY,
+                                startDay = c.getInt(10),
+                                endDay = c.getInt(11)
                             )
                         )
                     }
