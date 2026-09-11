@@ -5,8 +5,10 @@
         <item name="android:windowBackground">@android:color/black</item>
     </style>
 
+    <!-- Pure black, no wallpaper. The wallpaper is the first thing on a phone
+         designed to pull your eye; a home screen for putting the phone down
+         should not have one. -->
     <style name="Theme.Modes.Launcher" parent="Theme.Modes">
-        <item name="android:windowShowWallpaper">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Tune
@@ -38,6 +39,7 @@ import dev.jaronwilson.modes.ui.screens.ModeEditScreen
 import dev.jaronwilson.modes.ui.screens.ModesScreen
 import dev.jaronwilson.modes.ui.screens.NowScreen
 import dev.jaronwilson.modes.ui.screens.RulesScreen
+import dev.jaronwilson.modes.ui.screens.StatsScreen
 import dev.jaronwilson.modes.ui.theme.ModesTheme
 import kotlinx.coroutines.launch
 
@@ -79,7 +81,8 @@ private val TABS = listOf(
     Tab("now", "Now", Icons.Outlined.Schedule),
     Tab("modes", "Modes", Icons.Outlined.Tune),
     Tab("rules", "Rules", Icons.AutoMirrored.Outlined.Rule),
-    Tab("digest", "Waiting", Icons.Outlined.Inbox)
+    Tab("digest", "Waiting", Icons.Outlined.Inbox),
+    Tab("stats", "Stats", Icons.Outlined.Insights)
 )
 
 @Composable
@@ -149,6 +152,7 @@ private fun AppShell(startOnDigest: Boolean, editHomeFor: String?) {
             composable("folders") { FoldersScreen(onDone = { nav.popBackStack() }) }
             composable("rules") { RulesScreen() }
             composable("digest") { DigestScreen() }
+            composable("stats") { StatsScreen() }
         }
     }
 }

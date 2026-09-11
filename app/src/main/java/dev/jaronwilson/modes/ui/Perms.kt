@@ -2,6 +2,8 @@ package dev.jaronwilson.modes.ui
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.AppOpsManager
+import android.app.role.RoleManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -115,14 +117,48 @@ object Perms {
             ),
             PermItem(
                 key = "home",
-                title = "Minimal home screen",
-                why = "Optional. Set Modes Home as your launcher for a home screen with " +
-                    "only the current mode's apps on it.",
+                title = "Home screen",
+                why = "Replaces your home screen with the current mode's: today's " +
+                    "calendar and the apps the mode is for, on black. This is where " +
+                    "the simplicity actually lives.",
                 granted = isDefaultHome(context),
+                required = true,
+                intent = homeRoleIntent(context)
+            ),
+            PermItem(
+                key = "usage",
+                title = "Usage access",
+                why = "Optional. Lets the Stats screen show screen time per app, " +
+                    "from the system's own counters.",
+                granted = hasUsageAccess(context),
                 required = false,
-                intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
             )
         )
+    }
+
+    /**
+     * The system's "set as home" dialog. Much better than dropping people in
+     * Settings > Default apps and hoping. Falls back to the settings screen on
+     * the rare device where the role is not available.
+     */
+    fun homeRoleIntent(context: Context): Intent {
+        val rm = context.getSystemService(RoleManager::class.java)
+        return if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) {
+            rm.createRequestRoleIntent(RoleManager.ROLE_HOME)
+        } else {
+            Intent(Settings.ACTION_HOME_SETTINGS)
+        }
+    }
+
+    fun hasUsageAccess(context: Context): Boolean {
+        val ops = context.getSystemService(AppOpsManager::class.java) ?: return false
+        val mode = ops.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName
+        )
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 
     fun appSettings(context: Context): Intent =

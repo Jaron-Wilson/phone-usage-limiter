@@ -14,6 +14,7 @@ import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.TimeRule
+import dev.jaronwilson.modes.core.model.UsageEvent
 import dev.jaronwilson.modes.core.model.Vip
 import kotlinx.coroutines.flow.Flow
 
@@ -207,4 +208,19 @@ interface PassDao {
 
     @Query("DELETE FROM passes")
     suspend fun clear()
+}
+
+@Dao
+interface EventDao {
+    @Insert
+    suspend fun insert(event: UsageEvent)
+
+    @Query("SELECT * FROM events WHERE at >= :since ORDER BY at")
+    fun observeSince(since: Long): Flow<List<UsageEvent>>
+
+    @Query("SELECT * FROM events WHERE at >= :since ORDER BY at")
+    suspend fun since(since: Long): List<UsageEvent>
+
+    @Query("DELETE FROM events WHERE at < :cutoff")
+    suspend fun prune(cutoff: Long)
 }

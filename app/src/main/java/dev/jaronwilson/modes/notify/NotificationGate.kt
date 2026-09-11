@@ -9,7 +9,9 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import dev.jaronwilson.modes.AppGraph
+import dev.jaronwilson.modes.core.model.EventKind
 import dev.jaronwilson.modes.core.model.HeldNotification
+import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.schedule.DigestWindow
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -78,8 +80,11 @@ class NotificationGate : NotificationListenerService() {
             // If we recently released this, make sure a returning snooze does
             // not get grabbed again, and clear our stand-in copy.
             originals.remove(sbn.key)
+            Stats.log(EventKind.NOTIF_ALLOWED, sbn.packageName, verdict.notifClass.name)
             return
         }
+
+        val firstTimeHeld = !originals.containsKey(sbn.key)
 
         val mode = policy.mode
         val holdMs = DigestWindow.holdDuration(mode, System.currentTimeMillis())
@@ -103,6 +108,7 @@ class NotificationGate : NotificationListenerService() {
             snoozedUntil = System.currentTimeMillis() + holdMs
         )
 
+        if (firstTimeHeld) Stats.log(EventKind.NOTIF_HELD, sbn.packageName, verdict.notifClass.name)
         val snoozed = runCatching { snoozeNotification(sbn.key, holdMs) }.isSuccess
         if (!snoozed) {
             runCatching { cancelNotification(sbn.key) }

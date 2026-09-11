@@ -19,6 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -84,15 +86,36 @@ fun NowScreen(onOpenModes: () -> Unit) {
                 }
             }
         ) {
+            val roleLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { permsTick++ }
+
             if (missingRequired.isNotEmpty()) {
-                SectionHeader("Finish setting up")
+                SectionHeader("Activate")
                 Panel {
                     Text(
-                        "Modes cannot do its job until these are on.",
+                        "Editing happens here, in the app. Living with it happens on the " +
+                            "home screen. Nothing is active until these are on.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    missingRequired.forEach { item ->
+                    val home = missingRequired.firstOrNull { it.key == "home" }
+                    if (home != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                home.intent?.let { runCatching { roleLauncher.launch(it) } }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Make Modes my home screen") }
+                        Text(
+                            "Your old home screen is not deleted, just no longer what the " +
+                                "home button opens. Undo it from the same dialog any time.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    missingRequired.filter { it.key != "home" }.forEach { item ->
                         RowItem(
                             title = item.title,
                             subtitle = item.why,
@@ -113,6 +136,18 @@ fun NowScreen(onOpenModes: () -> Unit) {
                             )
                         }
                     }
+                }
+            }
+
+            if (missingRequired.isEmpty()) {
+                SectionHeader("Active")
+                Panel {
+                    Text(
+                        "Modes is your home screen and the gate is watching. Press home to " +
+                            "see the simple side.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
@@ -242,7 +277,10 @@ fun NowScreen(onOpenModes: () -> Unit) {
                         trailing = {
                             if (!item.granted && item.intent != null) {
                                 TextButton(onClick = {
-                                    runCatching { context.startActivity(item.intent) }
+                                    runCatching {
+                                        if (item.key == "home") roleLauncher.launch(item.intent)
+                                        else context.startActivity(item.intent)
+                                    }
                                 }) { Text("Grant") }
                             } else {
                                 Text(

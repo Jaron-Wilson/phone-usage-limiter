@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import dev.jaronwilson.modes.AppGraph
+import dev.jaronwilson.modes.core.model.EventKind
+import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.ui.theme.ModesTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -66,6 +68,7 @@ class InterstitialActivity : ComponentActivity() {
                     onProceed = {
                         lifecycleScope.launch {
                             AppGuardService.grantPass(pkg, modeId, mode?.passMinutes ?: 5)
+                            Stats.log(EventKind.PASS_GRANTED, pkg)
                             openApp(pkg)
                             finish()
                         }

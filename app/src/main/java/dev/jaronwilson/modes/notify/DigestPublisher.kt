@@ -8,7 +8,9 @@ import android.content.Intent
 import android.util.Log
 import dev.jaronwilson.modes.ModesApp
 import dev.jaronwilson.modes.R
+import dev.jaronwilson.modes.core.model.EventKind
 import dev.jaronwilson.modes.core.model.HeldNotification
+import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.core.repo.ModeRepository
 
 /**
@@ -53,6 +55,7 @@ class DigestPublisher(
 
         repo.heldDao.releaseAll(System.currentTimeMillis())
         repo.settings.setLastDigestAt(System.currentTimeMillis())
+        Stats.log(EventKind.DIGEST_RELEASED, detail = reason, count = pending.size)
         Log.i(TAG, "released ${pending.size} held notifications ($copied copies): $reason")
     }
 

@@ -14,14 +14,21 @@ post". So the app sorts notifications by *what they are*, not by which app sent
 them, lets the important ones straight through, and holds the rest until a time
 you picked.
 
+Two faces. **Editing** happens in the app, with icons, pickers and switches,
+because choosing between forty apps is faster with pictures. **Living with it**
+happens on the home screen, which is black, has no icons, and shows the day
+first: what is happening now, what is next, then the mode's apps as folders.
+The simplicity starts the moment you activate it, not before.
+
 Four moving parts:
 
 | Part | What it is | Optional? |
 |---|---|---|
 | Mode engine | Picks the current mode from your calendar and a time schedule | No |
 | Notification gate | A `NotificationListenerService` that holds the noise and batches it | No |
-| Minimal home screen | A text-only launcher: today's calendar, then the mode's apps in folders | Yes |
+| Home screen | Black. Now and next from your calendar, then the mode's apps in folders | No, once activated |
 | App guard | An `AccessibilityService` that stops you opening what the mode is not for | Yes |
+| Stats | Counts of what was held, stopped and opened, plus screen time from the system | - |
 
 The last two are genuinely optional. Skip them and everything else still works.
 
@@ -78,9 +85,12 @@ folder from the library:
 Thursday 11 September
 ◑ Work   Sprint planning
 
- ● 10:00  Sprint planning
- ○ 11:30  1:1
- ○ 14:00  Design review
+NOW
+Sprint planning
+until 11:00
+
+ · 11:30  1:1
+ · 14:00  Design review
 
 Phone
 Messages
@@ -232,6 +242,33 @@ What that means in practice:
 Add names under Rules. They are matched against the sender name on the
 notification, so one entry covers that person across texts, WhatsApp and
 Instagram DMs at once. A match overrides the mode entirely.
+
+## Activating it
+
+Editing is in the app. The simple part only starts when Modes becomes the home
+screen, so the Now screen leads with one button: **Make Modes my home screen**.
+It opens Android's own "set default home" dialog, which is the correct way to
+do this, rather than sending you off to find a setting. Your old launcher is
+not removed, it is just no longer what the home button opens, and the same
+dialog puts it back.
+
+Until that and the other required switches are on, the Now screen says so and
+nothing is considered active.
+
+## Stats
+
+The Stats tab is numbers, not charts. Today: notifications held versus let
+through, and which apps and classes made up the noise; where the day went, in
+time per mode; how many times a mode stopped you and how many times you went
+in anyway; what you opened from the home screen. Then the same for each of the
+last seven days.
+
+With usage access granted, it also shows per-app screen time from the system's
+own counters, which are more honest than anything this app could measure.
+
+Events are kept for thirty days and then dropped. This is for noticing
+patterns, not for surveillance, and "how many times did I put it down" turned
+out to be the one number that matters.
 
 ## Screenshots
 
@@ -402,6 +439,8 @@ tools/AppListExport       builds the dump, shared by the app and the script
 tools/ShareDump           clipboard and share sheet
 tools/ExportReceiver      lets adb ask for a dump without opening the app
 ui/screens/FoldersScreen  the shared folder library
+ui/screens/StatsScreen    what the phone did today, in numbers
+core/repo/Stats           fire-and-forget event logging
 ui/                       Compose settings, four tabs
 ```
 
@@ -431,7 +470,7 @@ than touching the database. If you add anything the gate needs, add it there.
   thumb can still get through by turning the service off in Settings. That is
   deliberate: a tool you cannot escape is one you will uninstall.
 - **Database migrations are destructive** (`fallbackToDestructiveMigration`),
-  and the schema is at version 4. Upgrading from an earlier build resets your
+  and the schema is at version 5. Upgrading from an earlier build resets your
   modes and folders to the defaults, which is how retuned folders arrive.
 - **`QUERY_ALL_PACKAGES` is declared.** A launcher has to be able to list what
   is installed, and the `<queries>` element alone misses archived apps. This is
@@ -474,4 +513,6 @@ hardest to debug on a phone:
 ./gradlew :app:testDebugUnitTest
 ```
 
-52 tests, all passing.
+- **`StatsTest`** - reconstructing time-per-mode from the change log.
+
+58 tests, all passing.

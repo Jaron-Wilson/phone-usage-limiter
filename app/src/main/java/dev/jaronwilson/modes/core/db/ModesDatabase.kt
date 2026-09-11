@@ -13,6 +13,7 @@ import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.TimeRule
+import dev.jaronwilson.modes.core.model.UsageEvent
 import dev.jaronwilson.modes.core.model.Vip
 
 @Database(
@@ -25,9 +26,10 @@ import dev.jaronwilson.modes.core.model.Vip
         HeldNotification::class,
         HomeEntry::class,
         Folder::class,
+        UsageEvent::class,
         AppPass::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -37,6 +39,7 @@ abstract class ModesDatabase : RoomDatabase() {
     abstract fun heldDao(): HeldDao
     abstract fun homeDao(): HomeDao
     abstract fun folderDao(): FolderDao
+    abstract fun eventDao(): EventDao
     abstract fun passDao(): PassDao
 
     companion object {

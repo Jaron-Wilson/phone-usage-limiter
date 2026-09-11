@@ -303,3 +303,36 @@ data class AppPass(
     val expiresAt: Long,
     val modeId: String
 )
+
+/** Something worth counting later. */
+enum class EventKind {
+    /** A mode started. detail = the mode it replaced. */
+    MODE_CHANGED,
+    /** The gate let a notification through. detail = its class. */
+    NOTIF_ALLOWED,
+    /** The gate held one. detail = its class. */
+    NOTIF_HELD,
+    /** The guard stopped you opening an app. detail = pause or home. */
+    GUARD_STOPPED,
+    /** You chose to go in anyway. */
+    PASS_GRANTED,
+    /** Held notifications were handed back. count = how many. */
+    DIGEST_RELEASED,
+    /** You opened an app from the home screen. */
+    APP_OPENED
+}
+
+/**
+ * One line in the ledger the Stats screen reads. Kept lean and pruned after a
+ * month; this is for noticing patterns, not for surveillance.
+ */
+@Entity(tableName = "events", indices = [Index("at"), Index("kind")])
+data class UsageEvent(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val at: Long,
+    val kind: EventKind,
+    val modeId: String,
+    val packageName: String? = null,
+    val detail: String? = null,
+    val count: Int = 1
+)

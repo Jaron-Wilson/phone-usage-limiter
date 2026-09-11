@@ -8,6 +8,8 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.AppPass
+import dev.jaronwilson.modes.core.model.EventKind
+import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.core.model.GuardMode
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -67,6 +69,7 @@ class AppGuardService : AccessibilityService() {
                 passes[pkg] = stillPassed.expiresAt
                 return@launch
             }
+            Stats.log(EventKind.GUARD_STOPPED, pkg, mode.guardMode.name)
             when (mode.guardMode) {
                 GuardMode.BLOCK -> {
                     performGlobalAction(GLOBAL_ACTION_HOME)

@@ -33,6 +33,7 @@ import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.installedCount
 import dev.jaronwilson.modes.core.model.pruned
 import dev.jaronwilson.modes.launcher.AppList
+import dev.jaronwilson.modes.ui.AppIcon
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
@@ -53,7 +54,7 @@ fun FoldersScreen(onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     val folders by AppGraph.repo.folderDao.observeAll().collectAsState(initial = emptyList())
-    val apps = remember { AppList.all(context) }
+    val apps = remember { AppList.all(context, withIcons = true) }
 
     var editing by remember { mutableStateOf<Long?>(null) }
     var newName by remember { mutableStateOf("") }
@@ -174,7 +175,8 @@ fun FoldersScreen(onDone: () -> Unit) {
                                             )
                                         }
                                     },
-                                    label = { Text(app.label) }
+                                    label = { Text(app.label) },
+                                    leadingIcon = { AppIcon(app.icon) }
                                 )
                             }
                         }

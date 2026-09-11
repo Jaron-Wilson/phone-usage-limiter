@@ -11,6 +11,8 @@ import dev.jaronwilson.modes.R
 import dev.jaronwilson.modes.core.model.ModeSource
 import dev.jaronwilson.modes.core.repo.ModeRepository
 import dev.jaronwilson.modes.core.repo.SettingsStore
+import dev.jaronwilson.modes.core.repo.Stats
+import dev.jaronwilson.modes.core.model.EventKind
 import dev.jaronwilson.modes.notify.DigestPublisher
 import dev.jaronwilson.modes.schedule.Decision
 import dev.jaronwilson.modes.ui.MainActivity
@@ -62,6 +64,7 @@ class ModeApplier(
 
         // A pass to open Instagram during Work should not survive into Sleep.
         if (changed) runCatching { repo.passDao.clear() }
+        if (changed) Stats.log(EventKind.MODE_CHANGED, detail = previous?.id ?: "")
 
         runCatching { zen.activate(decision.modeId, modes) }
             .onFailure { Log.w(TAG, "zen activate failed", it) }

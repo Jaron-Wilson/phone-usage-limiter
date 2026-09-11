@@ -12,6 +12,10 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
+    <!-- Optional. Screen time per app on the Stats screen. Granted by hand in
+         Settings > Usage access, never at install. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- A launcher has to be able to list what is installed, including apps
          that have been archived and so have no launcher entry of their own.

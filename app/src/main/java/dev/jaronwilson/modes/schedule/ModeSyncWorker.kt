@@ -18,6 +18,9 @@ class ModeSyncWorker(
         AppGraph.scheduler.scheduleNextDigest()
         AppGraph.repo.heldDao.prune(System.currentTimeMillis() - PRUNE_AFTER_MS)
         AppGraph.repo.passDao.prune(System.currentTimeMillis())
+        AppGraph.repo.eventDao.prune(
+            System.currentTimeMillis() - dev.jaronwilson.modes.core.repo.Stats.KEEP_DAYS * 24 * 60 * 60 * 1000
+        )
         return Result.success()
     }
 

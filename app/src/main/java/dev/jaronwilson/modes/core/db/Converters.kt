@@ -1,6 +1,7 @@
 package dev.jaronwilson.modes.core.db
 
 import androidx.room.TypeConverter
+import dev.jaronwilson.modes.core.model.EventKind
 import dev.jaronwilson.modes.core.model.GuardMode
 import dev.jaronwilson.modes.core.model.GuardScope
 import dev.jaronwilson.modes.core.model.MatchField
@@ -70,4 +71,11 @@ class Converters {
     @TypeConverter
     fun dbToField(value: String): MatchField =
         runCatching { MatchField.valueOf(value) }.getOrDefault(MatchField.ANY)
+
+    @TypeConverter
+    fun kindToDb(value: EventKind): String = value.name
+
+    @TypeConverter
+    fun dbToKind(value: String): EventKind =
+        runCatching { EventKind.valueOf(value) }.getOrDefault(EventKind.APP_OPENED)
 }

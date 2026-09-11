@@ -37,6 +37,7 @@ import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.launcher.AppList
+import dev.jaronwilson.modes.ui.AppIcon
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
@@ -62,7 +63,7 @@ fun HomeLayoutScreen(modeId: String, onDone: () -> Unit, onEditFolders: () -> Un
     val entries by AppGraph.repo.homeDao.observeForMode(modeId)
         .collectAsState(initial = emptyList())
     val folders by AppGraph.repo.folderDao.observeAll().collectAsState(initial = emptyList())
-    val apps = remember { AppList.all(context) }
+    val apps = remember { AppList.all(context, withIcons = true) }
 
     val current = mode ?: return
     val allowlist = current.guardScope == GuardScope.ALLOWLIST
@@ -231,7 +232,8 @@ fun HomeLayoutScreen(modeId: String, onDone: () -> Unit, onEditFolders: () -> Un
                                     )
                                 }
                             },
-                            label = { Text(app.label) }
+                            label = { Text(app.label) },
+                            leadingIcon = { AppIcon(app.icon) }
                         )
                     }
                 }
