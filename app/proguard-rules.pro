@@ -1,0 +1,2 @@
+-keep class dev.jaronwilson.modes.notify.NotificationGate { *; }
+-keep class dev.jaronwilson.modes.guard.AppGuardService { *; }
