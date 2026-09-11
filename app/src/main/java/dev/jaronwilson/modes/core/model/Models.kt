@@ -179,31 +179,78 @@ data class NotifRule(
 )
 
 /**
- * One row on the minimal home screen: either a single app, or a named folder
- * holding several.
+ * A named group of apps, shared across every mode.
  *
- * A folder is not just tidying. Under [GuardScope.ALLOWLIST] the packages
- * reachable from this screen are exactly the packages the mode permits, so
- * deciding what goes in a folder is the same act as deciding what the mode is
- * for.
+ * Folders are defined once and switched on per mode, because the grouping
+ * rarely changes but what you are allowed to reach does. "Social" means the
+ * same three apps whether you are working or not; the difference is that Work
+ * does not turn it on.
  */
-@Entity(tableName = "home_entries", indices = [Index("modeId")])
+@Entity(tableName = "folders")
+data class Folder(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    /** Contents, in the order they appear when the folder is opened. */
+    val packages: List<String> = emptyList(),
+    val sortOrder: Int = 0
+)
+
+/**
+ * One row on a mode's home screen: either a single app, or a reference to a
+ * [Folder] from the shared library.
+ *
+ * [enabled] is the per-mode switch. A folder turned off here is not just hidden:
+ * under [GuardScope.ALLOWLIST] its apps are not reachable, so turning off
+ * "Social" for Work is the same act as forbidding it.
+ */
+@Entity(tableName = "home_entries", indices = [Index("modeId"), Index("folderId")])
 data class HomeEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val modeId: String,
     val sortOrder: Int = 0,
-    /** Set for a single-app row, null for a folder. */
+    /** Set for a single-app row. */
     val packageName: String? = null,
-    /** Set for a folder, blank for a single-app row. */
-    val folderName: String = "",
-    /** Contents of a folder, in order. Empty for a single-app row. */
-    val packages: List<String> = emptyList()
-) {
-    val isFolder: Boolean get() = packageName == null
+    /** Set for a folder row, pointing into the shared library. */
+    val folderId: Long? = null,
+    val enabled: Boolean = true
+)
 
-    /** Every package this row can reach. */
-    val reachable: List<String>
-        get() = if (isFolder) packages else listOfNotNull(packageName)
+/** A home entry with its folder resolved. What the launcher actually draws. */
+data class HomeRow(
+    val entry: HomeEntry,
+    val folder: Folder?
+) {
+    val isFolder: Boolean get() = entry.folderId != null
+
+    val name: String get() = folder?.name ?: entry.packageName.orEmpty()
+
+    /** Folder contents, or the single app. Empty when switched off. */
+    val packages: List<String>
+        get() = when {
+            !entry.enabled -> emptyList()
+            folder != null -> folder.packages
+            else -> listOfNotNull(entry.packageName)
+        }
+
+    /** Every package this row lets you reach. */
+    val reachable: List<String> get() = packages
+}
+
+/**
+ * Joins a mode's rows to the shared folder library, dropping rows that point at
+ * a folder that no longer exists.
+ */
+fun resolveHomeRows(entries: List<HomeEntry>, folders: List<Folder>): List<HomeRow> {
+    val byId = folders.associateBy { it.id }
+    return entries
+        .sortedBy { it.sortOrder }
+        .mapNotNull { entry ->
+            when {
+                entry.folderId != null -> byId[entry.folderId]?.let { HomeRow(entry, it) }
+                entry.packageName != null -> HomeRow(entry, null)
+                else -> null
+            }
+        }
 }
 
 /** A person who gets through no matter what the mode says. */

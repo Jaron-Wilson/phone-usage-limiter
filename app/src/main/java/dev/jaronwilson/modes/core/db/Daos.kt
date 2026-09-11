@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Upsert
 import dev.jaronwilson.modes.core.model.AppPass
 import dev.jaronwilson.modes.core.model.CalendarRule
+import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.HeldNotification
 import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
@@ -137,6 +138,30 @@ interface HeldDao {
 }
 
 @Dao
+interface FolderDao {
+    @Query("SELECT * FROM folders ORDER BY sortOrder, name")
+    fun observeAll(): Flow<List<Folder>>
+
+    @Query("SELECT * FROM folders ORDER BY sortOrder, name")
+    suspend fun getAll(): List<Folder>
+
+    @Query("SELECT * FROM folders WHERE id = :id")
+    suspend fun get(id: Long): Folder?
+
+    @Upsert
+    suspend fun upsert(folder: Folder): Long
+
+    @Upsert
+    suspend fun upsertAll(folders: List<Folder>)
+
+    @Delete
+    suspend fun delete(folder: Folder)
+
+    @Query("SELECT COUNT(*) FROM folders")
+    suspend fun count(): Int
+}
+
+@Dao
 interface HomeDao {
     @Query("SELECT * FROM home_entries ORDER BY modeId, sortOrder")
     fun observeAll(): Flow<List<HomeEntry>>
@@ -158,6 +183,9 @@ interface HomeDao {
 
     @Query("DELETE FROM home_entries WHERE modeId = :modeId")
     suspend fun clearMode(modeId: String)
+
+    @Query("DELETE FROM home_entries WHERE folderId = :folderId")
+    suspend fun clearFolderRefs(folderId: Long)
 
     @Query("SELECT COUNT(*) FROM home_entries")
     suspend fun count(): Int

@@ -3,7 +3,9 @@ package dev.jaronwilson.modes
 import dev.jaronwilson.modes.core.Pkg
 import dev.jaronwilson.modes.core.model.GuardMode
 import dev.jaronwilson.modes.core.model.GuardScope
+import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.HomeEntry
+import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.guard.GuardPolicy
 import org.junit.Assert.assertEquals
@@ -133,19 +135,23 @@ class GuardPolicyTest {
         assertFalse(guarded("com.work.vpn", m))
     }
 
-    // ---- home entries feed the allowlist ----
+    // ---- folders feed the allowlist ----
+
+    private fun folder(id: Long, name: String, vararg pkgs: String) =
+        Folder(id = id, name = name, packages = pkgs.toList())
+
+    private fun folderRow(id: Long, folderId: Long, order: Int, on: Boolean = true) =
+        HomeEntry(id = id, modeId = "work", sortOrder = order, folderId = folderId, enabled = on)
+
+    private fun appRow(id: Long, pkg: String, order: Int, on: Boolean = true) =
+        HomeEntry(id = id, modeId = "work", sortOrder = order, packageName = pkg, enabled = on)
 
     @Test
     fun `folder contents and single apps both count as reachable`() {
-        val entries = listOf(
-            HomeEntry(id = 1, modeId = "work", sortOrder = 0, packageName = Pkg.DIALER),
-            HomeEntry(
-                id = 2, modeId = "work", sortOrder = 1,
-                folderName = "Everyday",
-                packages = listOf(Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME)
-            )
-        )
-        val reachable = entries.flatMap { it.reachable }.toSet()
+        val folders = listOf(folder(1, "Everyday", Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME))
+        val entries = listOf(appRow(1, Pkg.DIALER, 0), folderRow(2, 1, 1))
+
+        val reachable = resolveHomeRows(entries, folders).flatMap { it.reachable }.toSet()
         assertEquals(setOf(Pkg.DIALER, Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME), reachable)
 
         val m = mode()
@@ -154,18 +160,86 @@ class GuardPolicyTest {
     }
 
     @Test
-    fun `a folder row is a folder and an app row is not`() {
-        val app = HomeEntry(modeId = "work", packageName = Pkg.DIALER)
-        val folder = HomeEntry(modeId = "work", folderName = "Money", packages = listOf(Pkg.CHASE))
-        assertFalse(app.isFolder)
-        assertTrue(folder.isFolder)
-        assertEquals(listOf(Pkg.DIALER), app.reachable)
-        assertEquals(listOf(Pkg.CHASE), folder.reachable)
+    fun `a folder switched off for this mode is not reachable`() {
+        // The whole point of per-mode switches: Social exists, Work does not
+        // turn it on, so Work will not open Instagram.
+        val folders = listOf(folder(4, "Social", Pkg.INSTAGRAM, Pkg.REDDIT))
+        val entries = listOf(folderRow(1, 4, 0, on = false))
+
+        val reachable = resolveHomeRows(entries, folders).flatMap { it.reachable }.toSet()
+        assertTrue("a folder that is off contributes nothing", reachable.isEmpty())
+        assertTrue(guarded(Pkg.INSTAGRAM, mode(), reachable))
+    }
+
+    @Test
+    fun `switching the same folder on makes it reachable again`() {
+        val folders = listOf(folder(4, "Social", Pkg.INSTAGRAM))
+        val off = resolveHomeRows(listOf(folderRow(1, 4, 0, on = false)), folders)
+            .flatMap { it.reachable }.toSet()
+        val on = resolveHomeRows(listOf(folderRow(1, 4, 0, on = true)), folders)
+            .flatMap { it.reachable }.toSet()
+
+        assertTrue(guarded(Pkg.INSTAGRAM, mode(), off))
+        assertFalse(guarded(Pkg.INSTAGRAM, mode(), on))
+    }
+
+    @Test
+    fun `a single app row can be switched off too`() {
+        val entries = listOf(appRow(1, Pkg.CHROME, 0, on = false))
+        val rows = resolveHomeRows(entries, emptyList())
+        assertTrue(rows.single().reachable.isEmpty())
+    }
+
+    @Test
+    fun `folders are shared, so one edit reaches every mode that has it on`() {
+        val shared = folder(3, "Money", Pkg.CHASE, Pkg.VENMO)
+        val work = resolveHomeRows(listOf(folderRow(1, 3, 0)), listOf(shared))
+        val personal = resolveHomeRows(
+            listOf(HomeEntry(id = 9, modeId = "personal", folderId = 3)),
+            listOf(shared)
+        )
+        assertEquals(work.single().packages, personal.single().packages)
+
+        val edited = shared.copy(packages = shared.packages + Pkg.PAYPAL)
+        val after = resolveHomeRows(listOf(folderRow(1, 3, 0)), listOf(edited))
+        assertTrue(after.single().packages.contains(Pkg.PAYPAL))
+    }
+
+    @Test
+    fun `rows come back in sort order`() {
+        val folders = listOf(folder(1, "Everyday", Pkg.GMAIL))
+        val entries = listOf(
+            folderRow(3, 1, 2),
+            appRow(1, Pkg.DIALER, 0),
+            appRow(2, Pkg.MESSAGES, 1)
+        )
+        val names = resolveHomeRows(entries, folders).map { it.name }
+        assertEquals(listOf(Pkg.DIALER, Pkg.MESSAGES, "Everyday"), names)
+    }
+
+    @Test
+    fun `a row pointing at a deleted folder is dropped, not crashed on`() {
+        val entries = listOf(folderRow(1, 99, 0), appRow(2, Pkg.DIALER, 1))
+        val rows = resolveHomeRows(entries, emptyList())
+        assertEquals(1, rows.size)
+        assertEquals(Pkg.DIALER, rows.single().name)
     }
 
     @Test
     fun `an empty folder contributes nothing`() {
-        val folder = HomeEntry(modeId = "work", folderName = "Empty")
-        assertTrue(folder.reachable.isEmpty())
+        val rows = resolveHomeRows(listOf(folderRow(1, 5, 0)), listOf(folder(5, "Empty")))
+        assertTrue(rows.single().reachable.isEmpty())
+    }
+
+    @Test
+    fun `a folder row is a folder and an app row is not`() {
+        val rows = resolveHomeRows(
+            listOf(appRow(1, Pkg.DIALER, 0), folderRow(2, 3, 1)),
+            listOf(folder(3, "Money", Pkg.CHASE))
+        )
+        assertFalse(rows[0].isFolder)
+        assertTrue(rows[1].isFolder)
+        assertEquals(listOf(Pkg.DIALER), rows[0].reachable)
+        assertEquals(listOf(Pkg.CHASE), rows[1].reachable)
     }
 }

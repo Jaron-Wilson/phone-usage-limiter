@@ -6,6 +6,10 @@
 #   ./tools/pull-apps.sh --kotlin     # constants to paste into Defaults.kt
 #   ./tools/pull-apps.sh --json       # machine readable
 #   ./tools/pull-apps.sh --layout     # the home screens as they stand now
+#   ./tools/pull-apps.sh --all        # the full report, same as the in-app dump
+#
+# The same report is available inside the app, under Now > Dump your app list,
+# with Copy and Send buttons. Use that when there is no computer to hand.
 #
 # Works best with Modes installed, which is what gives you human app names.
 # Without it you still get package names via plain adb.
@@ -44,13 +48,13 @@ if printf '%s\n' "$installed" | grep -qx "$PKG"; then
     adb shell "test -f ${remote}/apps.txt" 2>/dev/null \
         || die "Modes did not write the list. Open the app once, then retry."
 
-    for f in apps.txt apps.json layout.txt; do
+    for f in apps.txt apps.json modes-dump.txt; do
         adb pull "${remote}/${f}" "${OUT_DIR}/${f}" >/dev/null 2>&1 || true
     done
 
     case "$MODE" in
         --json)   cat "${OUT_DIR}/apps.json" ;;
-        --layout) cat "${OUT_DIR}/layout.txt" ;;
+        --layout|--all) cat "${OUT_DIR}/modes-dump.txt" ;;
         --kotlin)
             awk 'NF && $0 !~ /^#/ {
                 pkg = $NF

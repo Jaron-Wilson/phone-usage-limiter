@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+// Version lives in version.properties at the repo root so it can be bumped
+// without editing the build script. tools/bump-version.sh moves it on.
+val versionProps = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
 }
 
 android {
@@ -13,8 +21,8 @@ android {
         applicationId = "dev.jaronwilson.modes"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionProps.getProperty("versionCode").trim().toInt()
+        versionName = versionProps.getProperty("versionName").trim()
     }
 
     buildTypes {
@@ -39,6 +47,19 @@ android {
     }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    }
+}
+
+// Name the APK after its version, so two builds are never confused.
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
+                output.outputFileName.set(
+                    "Modes-v${versionProps.getProperty("versionName").trim()}-${variant.buildType}.apk"
+                )
+            }
+        }
     }
 }
 

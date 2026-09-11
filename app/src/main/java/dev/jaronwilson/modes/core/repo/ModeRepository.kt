@@ -3,8 +3,11 @@ package dev.jaronwilson.modes.core.repo
 import android.content.Context
 import dev.jaronwilson.modes.core.Defaults
 import dev.jaronwilson.modes.core.db.ModesDatabase
+import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.HomeEntry
+import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.model.Mode
+import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
 import kotlinx.coroutines.CoroutineScope
@@ -28,17 +31,20 @@ data class PolicySnapshot(
     val vips: List<Vip>,
     val gateEnabled: Boolean,
     val guardEnabled: Boolean,
-    /** The active mode's home screen, in order. */
-    val homeEntries: List<HomeEntry> = emptyList()
+    /** The active mode's home screen, in order, folders resolved. */
+    val homeRows: List<HomeRow> = emptyList()
 ) {
     /**
      * Every package reachable from the current home screen. Under
      * [dev.jaronwilson.modes.core.model.GuardScope.ALLOWLIST] this is exactly
      * the set of apps the mode permits, which is why arranging your folders and
      * choosing what you are allowed to open are the same action.
+     *
+     * A folder switched off for this mode contributes nothing, by way of
+     * [HomeRow.reachable].
      */
     val homePackages: Set<String> =
-        homeEntries.flatMap { it.reachable }.toSet()
+        homeRows.flatMap { it.reachable }.toSet()
 
     /** Pre-compiled so matching a notification does not recompile regexes. */
     val compiledRules: List<Pair<NotifRule, Regex>> = notifRules.mapNotNull { rule ->
@@ -58,6 +64,7 @@ class ModeRepository(
     val ruleDao = db.ruleDao()
     val heldDao = db.heldDao()
     val homeDao = db.homeDao()
+    val folderDao = db.folderDao()
     val passDao = db.passDao()
     val settings = SettingsStore(context)
 
@@ -78,8 +85,9 @@ class ModeRepository(
         combine(
             settings.gateEnabled,
             settings.guardEnabled,
-            homeDao.observeAll()
-        ) { gate, guard, home -> Triple(gate, guard, home) }
+            homeDao.observeAll(),
+            folderDao.observeAll()
+        ) { gate, guard, home, folders -> Extras(gate, guard, home, folders) }
     ) { active, allModes, rules, vips, extra ->
         val mode = allModes.firstOrNull { it.id == active.modeId }
             ?: allModes.firstOrNull { it.isDefault }
@@ -89,11 +97,21 @@ class ModeRepository(
             mode = mode,
             notifRules = rules.filter { it.enabled }.sortedByDescending { it.priority },
             vips = vips.filter { it.enabled },
-            gateEnabled = extra.first,
-            guardEnabled = extra.second,
-            homeEntries = extra.third.filter { it.modeId == mode.id }.sortedBy { it.sortOrder }
+            gateEnabled = extra.gate,
+            guardEnabled = extra.guard,
+            homeRows = resolveHomeRows(
+                extra.home.filter { it.modeId == mode.id },
+                extra.folders
+            )
         )
     }
+
+    private data class Extras(
+        val gate: Boolean,
+        val guard: Boolean,
+        val home: List<HomeEntry>,
+        val folders: List<Folder>
+    )
 
     fun startCaching() {
         scope.launch {
@@ -109,6 +127,7 @@ class ModeRepository(
         if (ruleDao.notifRuleCount() == 0) Defaults.notifRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.timeRuleCount() == 0) Defaults.timeRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.calendarRuleCount() == 0) Defaults.calendarRules().forEach { ruleDao.upsert(it) }
+        if (folderDao.count() == 0) folderDao.upsertAll(Defaults.folders())
         if (homeDao.count() == 0) homeDao.upsertAll(Defaults.homeEntries())
         settings.setSeeded(true)
     }
@@ -123,6 +142,7 @@ class ModeRepository(
         ruleDao.observeCalendarRules().first().forEach { ruleDao.delete(it) }
         Defaults.calendarRules().forEach { ruleDao.upsert(it) }
         modeDao.getAll().forEach { homeDao.clearMode(it.id) }
+        folderDao.upsertAll(Defaults.folders())
         homeDao.upsertAll(Defaults.homeEntries())
     }
 

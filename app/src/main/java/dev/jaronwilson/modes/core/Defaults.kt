@@ -3,6 +3,7 @@ package dev.jaronwilson.modes.core
 import android.app.NotificationManager
 import dev.jaronwilson.modes.core.model.CalendarRule
 import dev.jaronwilson.modes.core.model.GuardMode
+import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.GuardScope
 import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.MatchField
@@ -259,18 +260,64 @@ object Defaults {
         )
     )
 
+    // Seeded folders get fixed ids so the starting home screens can point at
+    // them. Room only auto-assigns when the id is zero.
+    const val FOLDER_EVERYDAY = 1L
+    const val FOLDER_WORK = 2L
+    const val FOLDER_MONEY = 3L
+    const val FOLDER_SOCIAL = 4L
+    const val FOLDER_MEDIA = 5L
+    const val FOLDER_TOOLS = 6L
+    const val FOLDER_HOUSE = 7L
+
+    /**
+     * The shared folder library.
+     *
+     * Defined once, switched on per mode. The grouping of your apps rarely
+     * changes; what you should be able to reach at 10am on a Tuesday does.
+     */
+    fun folders(): List<Folder> = listOf(
+        Folder(
+            id = FOLDER_EVERYDAY, sortOrder = 0, name = "Everyday",
+            packages = listOf(Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME)
+        ),
+        Folder(
+            id = FOLDER_WORK, sortOrder = 1, name = "Work",
+            packages = listOf(Pkg.GMAIL, Pkg.SLACK, Pkg.KEEP, Pkg.DRIVE, Pkg.CALENDAR)
+        ),
+        Folder(
+            id = FOLDER_MONEY, sortOrder = 2, name = "Money",
+            packages = Pkg.FINANCE.toList()
+        ),
+        Folder(
+            id = FOLDER_SOCIAL, sortOrder = 3, name = "Social",
+            packages = listOf(Pkg.INSTAGRAM, Pkg.X, Pkg.REDDIT, Pkg.TIKTOK)
+        ),
+        Folder(
+            id = FOLDER_MEDIA, sortOrder = 4, name = "Media",
+            packages = listOf(Pkg.SPOTIFY, Pkg.YOUTUBE, Pkg.YOUTUBE_MUSIC, Pkg.PODCASTS)
+        ),
+        Folder(
+            id = FOLDER_TOOLS, sortOrder = 5, name = "Tools",
+            packages = listOf(Pkg.KEEP, Pkg.CALENDAR, Pkg.CLOCK, Pkg.AUTHENTICATOR)
+        ),
+        Folder(
+            id = FOLDER_HOUSE, sortOrder = 6, name = "Odds and ends",
+            packages = listOf(Pkg.PHOTOS, Pkg.WALLET, Pkg.CAMERA)
+        )
+    )
+
     /**
      * The starting home screens.
      *
      * Read these as answers to "what is this mode for". Under
-     * [GuardScope.ALLOWLIST] they are also the mode's permission list, so an
-     * app in no folder is an app you cannot open without going through a pause.
+     * [GuardScope.ALLOWLIST] they are also the mode's permission list, so a
+     * folder switched off is a set of apps you cannot open.
      *
      * Single apps sit at the top level, because a folder you open twenty times
      * a day is just friction. Everything else is grouped.
      */
     fun homeEntries(): List<HomeEntry> {
-        val money = Pkg.FINANCE.toList()
 
         fun layout(modeId: String, build: MutableList<HomeEntry>.() -> Unit): List<HomeEntry> {
             val rows = mutableListOf<HomeEntry>()
@@ -279,8 +326,8 @@ object Defaults {
         }
 
         fun app(pkg: String) = HomeEntry(modeId = "", packageName = pkg)
-        fun folder(name: String, vararg pkgs: String) =
-            HomeEntry(modeId = "", folderName = name, packages = pkgs.toList())
+        fun folder(id: Long, on: Boolean = true) =
+            HomeEntry(modeId = "", folderId = id, enabled = on)
 
         return buildList {
             addAll(
@@ -289,10 +336,11 @@ object Defaults {
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CALENDAR))
                     add(app(Pkg.CAMERA))
-                    add(folder("Everyday", Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME))
-                    add(folder("Money", *money.toTypedArray()))
-                    add(folder("Social", Pkg.INSTAGRAM, Pkg.SPOTIFY, Pkg.YOUTUBE))
-                    add(folder("Odds and ends", Pkg.PHOTOS, Pkg.KEEP, Pkg.CLOCK, Pkg.WALLET))
+                    add(folder(FOLDER_EVERYDAY))
+                    add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_SOCIAL))
+                    add(folder(FOLDER_MEDIA))
+                    add(folder(FOLDER_HOUSE))
                 }
             )
             addAll(
@@ -300,9 +348,11 @@ object Defaults {
                     add(app(Pkg.DIALER))
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CALENDAR))
-                    add(folder("Work", Pkg.GMAIL, Pkg.SLACK, Pkg.KEEP, Pkg.DRIVE))
-                    add(folder("Everyday", Pkg.MAPS, Pkg.CHROME, Pkg.WALLET))
-                    add(folder("Money", *money.toTypedArray()))
+                    add(folder(FOLDER_WORK))
+                    add(folder(FOLDER_EVERYDAY))
+                    add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_SOCIAL, on = false))
+                    add(folder(FOLDER_MEDIA, on = false))
                 }
             )
             addAll(
@@ -310,8 +360,11 @@ object Defaults {
                     add(app(Pkg.DIALER))
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CLOCK))
-                    add(folder("Tools", Pkg.KEEP, Pkg.CALENDAR))
-                    add(folder("Money", *money.toTypedArray()))
+                    add(folder(FOLDER_TOOLS))
+                    add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_EVERYDAY, on = false))
+                    add(folder(FOLDER_SOCIAL, on = false))
+                    add(folder(FOLDER_MEDIA, on = false))
                 }
             )
             addAll(
@@ -320,9 +373,11 @@ object Defaults {
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CALENDAR))
                     add(app(Pkg.CAMERA))
-                    add(folder("Everyday", Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME))
-                    add(folder("Money", *money.toTypedArray()))
-                    add(folder("Social", Pkg.INSTAGRAM, Pkg.SPOTIFY, Pkg.YOUTUBE))
+                    add(folder(FOLDER_EVERYDAY))
+                    add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_SOCIAL))
+                    add(folder(FOLDER_MEDIA))
+                    add(folder(FOLDER_HOUSE))
                 }
             )
             addAll(
@@ -330,7 +385,9 @@ object Defaults {
                     add(app(Pkg.CLOCK))
                     add(app(Pkg.DIALER))
                     add(app(Pkg.MESSAGES))
-                    add(folder("Money", *money.toTypedArray()))
+                    add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_SOCIAL, on = false))
+                    add(folder(FOLDER_MEDIA, on = false))
                 }
             )
         }

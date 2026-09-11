@@ -32,6 +32,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.notify.DigestPublisher
 import dev.jaronwilson.modes.ui.screens.DigestScreen
+import dev.jaronwilson.modes.ui.screens.FoldersScreen
 import dev.jaronwilson.modes.ui.screens.HomeLayoutScreen
 import dev.jaronwilson.modes.ui.screens.ModeEditScreen
 import dev.jaronwilson.modes.ui.screens.ModesScreen
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         AppGraph.ensure(applicationContext)
         val startOnDigest = intent?.getBooleanExtra(DigestPublisher.EXTRA_SHOW_DIGEST, false) == true
+        val editHomeFor = intent?.getStringExtra(EXTRA_EDIT_HOME_FOR)
 
         setContent {
             ModesTheme {
@@ -56,9 +58,13 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     permissionLauncher.launch(Perms.runtimePermissions)
                 }
-                AppShell(startOnDigest)
+                AppShell(startOnDigest, editHomeFor)
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_EDIT_HOME_FOR = "edit_home_for"
     }
 
     override fun onResume() {
@@ -77,8 +83,12 @@ private val TABS = listOf(
 )
 
 @Composable
-private fun AppShell(startOnDigest: Boolean) {
+private fun AppShell(startOnDigest: Boolean, editHomeFor: String?) {
     val nav = rememberNavController()
+    // Long-pressing a folder on the home screen lands you on its switches.
+    LaunchedEffect(editHomeFor) {
+        if (!editHomeFor.isNullOrBlank()) nav.navigate("home/$editHomeFor")
+    }
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination
     val heldCount by AppGraph.repo.heldDao.observePendingCount().collectAsState(initial = 0)
@@ -116,7 +126,10 @@ private fun AppShell(startOnDigest: Boolean) {
         ) {
             composable("now") { NowScreen(onOpenModes = { nav.navigate("modes") }) }
             composable("modes") {
-                ModesScreen(onEdit = { id -> nav.navigate("mode/$id") })
+                ModesScreen(
+                    onEdit = { id -> nav.navigate("mode/$id") },
+                    onEditFolders = { nav.navigate("folders") }
+                )
             }
             composable("mode/{id}") { entry ->
                 val id = entry.arguments?.getString("id").orEmpty()
@@ -129,9 +142,11 @@ private fun AppShell(startOnDigest: Boolean) {
             composable("home/{id}") { entry ->
                 HomeLayoutScreen(
                     modeId = entry.arguments?.getString("id").orEmpty(),
-                    onDone = { nav.popBackStack() }
+                    onDone = { nav.popBackStack() },
+                    onEditFolders = { nav.navigate("folders") }
                 )
             }
+            composable("folders") { FoldersScreen(onDone = { nav.popBackStack() }) }
             composable("rules") { RulesScreen() }
             composable("digest") { DigestScreen() }
         }

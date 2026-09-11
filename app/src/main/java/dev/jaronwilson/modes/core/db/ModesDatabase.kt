@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import dev.jaronwilson.modes.core.model.AppPass
 import dev.jaronwilson.modes.core.model.CalendarRule
+import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.HeldNotification
 import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
@@ -23,9 +24,10 @@ import dev.jaronwilson.modes.core.model.Vip
         Vip::class,
         HeldNotification::class,
         HomeEntry::class,
+        Folder::class,
         AppPass::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -34,6 +36,7 @@ abstract class ModesDatabase : RoomDatabase() {
     abstract fun ruleDao(): RuleDao
     abstract fun heldDao(): HeldDao
     abstract fun homeDao(): HomeDao
+    abstract fun folderDao(): FolderDao
     abstract fun passDao(): PassDao
 
     companion object {

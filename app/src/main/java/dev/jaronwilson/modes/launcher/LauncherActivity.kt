@@ -11,7 +11,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,7 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jaronwilson.modes.AppGraph
-import dev.jaronwilson.modes.core.model.HomeEntry
+import dev.jaronwilson.modes.core.model.HomeRow
+import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.notify.DigestPublisher
 import dev.jaronwilson.modes.schedule.CalEvent
 import dev.jaronwilson.modes.ui.MainActivity
@@ -111,6 +114,14 @@ private fun Home() {
     val entries by AppGraph.repo.homeDao
         .observeForMode(mode?.id.orEmpty())
         .collectAsState(initial = emptyList())
+    val folders by AppGraph.repo.folderDao.observeAll().collectAsState(initial = emptyList())
+
+    // Rows switched off for this mode are not drawn at all. Under an allowlist
+    // guard they are also not openable, so the screen stays an honest picture
+    // of what the mode permits.
+    val rows = remember(entries, folders) {
+        resolveHomeRows(entries, folders).filter { it.entry.enabled && it.packages.isNotEmpty() }
+    }
 
     var clock by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
@@ -205,13 +216,14 @@ private fun Home() {
 
             if (!showAll) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    items(entries, key = { it.id }) { entry ->
-                        HomeRow(
-                            entry = entry,
-                            expanded = openFolder == entry.id,
+                    items(rows, key = { it.entry.id }) { row ->
+                        HomeRowView(
+                            row = row,
+                            expanded = openFolder == row.entry.id,
                             onToggle = {
-                                openFolder = if (openFolder == entry.id) null else entry.id
-                            }
+                                openFolder = if (openFolder == row.entry.id) null else row.entry.id
+                            },
+                            onLongPress = { openApp(context, editHomeFor = mode?.id) }
                         )
                     }
                     item {
@@ -298,19 +310,25 @@ private fun Agenda(events: List<CalEvent>) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HomeRow(entry: HomeEntry, expanded: Boolean, onToggle: () -> Unit) {
+private fun HomeRowView(
+    row: HomeRow,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onLongPress: () -> Unit
+) {
     val context = LocalContext.current
 
-    if (!entry.isFolder) {
-        val pkg = entry.packageName ?: return
+    if (!row.isFolder) {
+        val pkg = row.entry.packageName ?: return
         if (!AppList.isInstalled(context, pkg)) return
         AppRow(AppList.label(context, pkg)) { AppList.launch(context, pkg) }
         return
     }
 
-    val contents = remember(entry.packages) {
-        entry.packages.filter { AppList.isInstalled(context, it) }
+    val contents = remember(row.packages) {
+        row.packages.filter { AppList.isInstalled(context, it) }
     }
     if (contents.isEmpty()) return
 
@@ -319,11 +337,11 @@ private fun HomeRow(entry: HomeEntry, expanded: Boolean, onToggle: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggle)
+                .combinedClickable(onClick = onToggle, onLongClick = onLongPress)
                 .padding(vertical = 11.dp)
         ) {
             Text(
-                entry.folderName,
+                row.name,
                 fontSize = 22.sp,
                 color = if (expanded) InkBright else Ink
             )
@@ -365,11 +383,16 @@ private fun AppRow(label: String, onClick: () -> Unit) {
     )
 }
 
-private fun openApp(context: Context, showDigest: Boolean = false) {
+private fun openApp(
+    context: Context,
+    showDigest: Boolean = false,
+    editHomeFor: String? = null
+) {
     context.startActivity(
         Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(DigestPublisher.EXTRA_SHOW_DIGEST, showDigest)
+            .putExtra(MainActivity.EXTRA_EDIT_HOME_FOR, editHomeFor)
     )
 }
 

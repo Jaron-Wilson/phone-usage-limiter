@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.repo.SettingsStore
 import dev.jaronwilson.modes.notify.DigestPublisher
+import dev.jaronwilson.modes.tools.ShareDump
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.Perms
 import dev.jaronwilson.modes.ui.RowItem
@@ -197,6 +198,39 @@ fun NowScreen(onOpenModes: () -> Unit) {
                     onClick = { runCatching { context.startActivity(Perms.appSettings(context)) } },
                     label = { Text("App settings") }
                 )
+            }
+
+            SectionHeader("Dump your app list")
+            Panel {
+                Text(
+                    "Every installed app with its package name, your folders, and " +
+                        "each mode's home screen. Copy it, or send it somewhere with " +
+                        "a keyboard, and build your folders from real names instead " +
+                        "of guesses.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                var copied by remember { mutableStateOf(0) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        scope.launch {
+                            copied = ShareDump.copyToClipboard(context, AppGraph.repo)
+                        }
+                    }) { Text("Copy") }
+                    OutlinedButton(onClick = {
+                        scope.launch {
+                            runCatching { ShareDump.share(context, AppGraph.repo) }
+                        }
+                    }) { Text("Send") }
+                }
+                if (copied > 0) {
+                    Text(
+                        "Copied $copied characters to the clipboard. Paste it anywhere.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             SectionHeader("Permissions")

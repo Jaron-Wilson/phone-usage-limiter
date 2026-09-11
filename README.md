@@ -37,10 +37,33 @@ The last two are genuinely optional. Skip them and everything else still works.
 
 Edit any of them in the app. Nothing here is hardcoded.
 
+## Folders are shared, switches are per mode
+
+There is one folder library. "Social" is defined once and means the same three
+apps everywhere. What changes between modes is only which folders are **switched
+on**:
+
+| Folder | Open | Work | Deep focus | Personal | Sleep |
+|---|---|---|---|---|---|
+| Everyday | on | on | off | on | - |
+| Work | - | on | - | - | - |
+| Money | on | on | on | on | on |
+| Social | on | **off** | **off** | on | **off** |
+| Media | on | **off** | **off** | on | **off** |
+| Tools | - | - | on | - | - |
+
+Edit contents once under **Modes > Edit the folder library**. Flip switches per
+mode under **Modes > (a mode) > Arrange home screen**, or long-press any folder
+on the home screen to land straight on its switches.
+
+This matters more than tidiness. Under an allowlist guard a folder switched off
+is not hidden, it is forbidden: turning "Social" off for Work is the same act as
+saying Work may not open Instagram.
+
 ## The home screen is the allowlist
 
 Each mode's home screen is a list of rows. A row is either a single app or a
-named folder:
+folder from the library:
 
 ```
 9:41
@@ -54,14 +77,15 @@ Thursday 11 September
 Phone
 Messages
 Calendar
-Work        4
+Work        5
 Everyday    3
 Money       9
 
 everything else
 ```
 
-Tap a folder to expand it in place. Apps you reach for constantly sit at the top
+Tap a folder to expand it in place, long-press to edit which folders this mode
+uses. Apps you reach for constantly sit at the top
 level, because a folder you open twenty times a day is just friction.
 
 **When a mode's guard is set to allowlist, this screen is also its permission
@@ -102,24 +126,29 @@ One, Citi, Ally, Discover, Amex, USAA, PayPal, Venmo, Cash App, Zelle,
 Robinhood, Fidelity, Schwab, Chime, SoFi, Credit Karma, Google Wallet). Yours
 may differ, which is what the next section is for.
 
-## Seeing what is actually installed
+## Dumping your app list
 
 Package names are the one thing you cannot guess from a desktop, and the shipped
-defaults are educated guesses about a phone nobody has seen.
+folders are educated guesses about a phone nobody has seen.
+
+**From the phone**, with no computer involved: open the app, go to **Now > Dump
+your app list**, and tap **Copy** or **Send**. You get every installed app with
+its package name, the folder library, and every mode's home screen with each row
+marked on or off. Copy puts it on the clipboard to paste anywhere; Send opens
+the share sheet with the report as a text file.
+
+**From a computer**, over adb:
 
 ```bash
 ./tools/pull-apps.sh            # every app, name and package, as a table
+./tools/pull-apps.sh --all      # the full report, same as the in-app dump
 ./tools/pull-apps.sh --kotlin   # constants to paste into Defaults.kt
 ./tools/pull-apps.sh --json     # machine readable
-./tools/pull-apps.sh --layout   # your home screens as they stand right now
 ```
 
-It triggers an export inside the app over adb and pulls the result, so you get
-real app names rather than bare package names. With the app not yet installed it
-falls back to `pm list packages -3`, which gives packages only.
-
-Nothing here is required: the folder editor in the app lists every installed app
-with a search box. The script is for planning on a big screen.
+Both routes use the same builder, `AppListExport`. With the app not yet
+installed the script falls back to `pm list packages -3`, which gives packages
+only.
 
 ## How the mode gets chosen
 
@@ -198,9 +227,15 @@ Instagram DMs at once. A match overrides the mode entirely.
 Needs a JDK 17 or newer and an Android SDK with platform 35.
 
 ```bash
+./tools/bump-version.sh          # 0.1.1 -> 0.1.2, and the build number
 ./gradlew :app:assembleDebug
-# app/build/outputs/apk/debug/app-debug.apk
+# app/build/outputs/apk/debug/Modes-v0.1.2-debug.apk
 ```
+
+The version lives in `version.properties` at the repo root and the APK is named
+after it, so two builds are never confused on the phone. Bump it before every
+install: Android refuses to upgrade a package whose `versionCode` has not
+increased. `--minor` and `--major` are there when a change deserves it.
 
 If `local.properties` does not point at your SDK, fix that first. Unit tests:
 
@@ -275,8 +310,9 @@ degrades quietly rather than crashing.
 
 ```
 core/model/Models.kt      every entity and enum, start here
-core/Defaults.kt          the five modes, home folders, schedule, Instagram
-                          and money rules
+core/Defaults.kt          the five modes, the folder library, schedule,
+                          Instagram and money rules
+core/model/Models.kt      resolveHomeRows joins modes to the folder library
 core/repo/ModeRepository  the cached PolicySnapshot the gate reads
 schedule/ScheduleResolver which mode should be running, and when that changes
 schedule/ModeScheduler    alarms, the periodic worker, digest windows
@@ -288,7 +324,10 @@ notify/DigestPublisher    batching and release
 guard/GuardPolicy         whether an app may be opened, pure and well tested
 guard/AppGuardService     the foreground app watcher
 launcher/LauncherActivity the minimal home screen, agenda and folders
-tools/ExportReceiver      dumps the installed app list for tools/pull-apps.sh
+tools/AppListExport       builds the dump, shared by the app and the script
+tools/ShareDump           clipboard and share sheet
+tools/ExportReceiver      lets adb ask for a dump without opening the app
+ui/screens/FoldersScreen  the shared folder library
 ui/                       Compose settings, four tabs
 ```
 
@@ -318,7 +357,7 @@ than touching the database. If you add anything the gate needs, add it there.
   thumb can still get through by turning the service off in Settings. That is
   deliberate: a tool you cannot escape is one you will uninstall.
 - **Database migrations are destructive** (`fallbackToDestructiveMigration`),
-  and the schema is at version 2. Upgrading from the first build resets your
+  and the schema is at version 3. Upgrading from an earlier build resets your
   modes and folders to the defaults. Fine while iterating. Change it before you
   have settings worth keeping.
 
@@ -330,11 +369,12 @@ hardest to debug on a phone:
 - **`ScheduleTest`** - schedule windows that cross midnight, and digest maths.
 - **`GuardPolicyTest`** - which apps a mode will and will not open, including an
   assertion that every essential and every money app stays reachable in the
-  strictest mode. If you change the guard, this is the file that stops you
-  locking yourself out.
+  strictest mode, and that a folder switched off really is unreachable rather
+  than merely hidden. If you change the guard or the folder model, this is the
+  file that stops you locking yourself out.
 
 ```bash
 ./gradlew :app:testDebugUnitTest
 ```
 
-32 tests, all passing.
+38 tests, all passing.

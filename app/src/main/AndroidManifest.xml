@@ -108,6 +108,17 @@
             android:name=".notify.DigestActionReceiver"
             android:exported="false" />
 
+        <!-- Lets the share sheet read the exported dump. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Triggered over adb by tools/pull-apps.sh. Writes a list of installed
              apps to this app's own files directory and nothing else. -->
         <receiver

@@ -2,6 +2,7 @@ package dev.jaronwilson.modes.ui.screens
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedButton
@@ -20,7 +21,7 @@ import dev.jaronwilson.modes.ui.SectionHeader
 import kotlinx.coroutines.launch
 
 @Composable
-fun ModesScreen(onEdit: (String) -> Unit) {
+fun ModesScreen(onEdit: (String) -> Unit, onEditFolders: () -> Unit) {
     val modes by AppGraph.repo.modes.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
@@ -49,6 +50,17 @@ fun ModesScreen(onEdit: (String) -> Unit) {
                         },
                         onClick = { onEdit(mode.id) }
                     )
+                }
+            }
+
+            SectionHeader("Folders")
+            Panel {
+                Text(
+                    "One shared library. Each mode switches folders on or off " +
+                        "rather than keeping its own copy."
+                )
+                OutlinedButton(onClick = onEditFolders, modifier = Modifier.fillMaxWidth()) {
+                    Text("Edit the folder library")
                 }
             }
 
