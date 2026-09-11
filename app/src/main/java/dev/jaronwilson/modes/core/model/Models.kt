@@ -196,6 +196,20 @@ data class Folder(
 )
 
 /**
+ * Drops packages that are not on the phone.
+ *
+ * Shipped folders name apps you may not have, and a folder claiming twenty apps
+ * when six exist is a folder you cannot reason about. Pure so it can be tested
+ * without a package manager.
+ */
+fun Folder.pruned(isInstalled: (String) -> Boolean): Folder =
+    copy(packages = packages.filter(isInstalled))
+
+/** How many of a folder's apps are actually openable. */
+fun Folder.installedCount(isInstalled: (String) -> Boolean): Int =
+    packages.count(isInstalled)
+
+/**
  * One row on a mode's home screen: either a single app, or a reference to a
  * [Folder] from the shared library.
  *

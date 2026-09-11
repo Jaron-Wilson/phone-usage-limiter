@@ -27,7 +27,7 @@ import dev.jaronwilson.modes.core.model.Vip
         Folder::class,
         AppPass::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

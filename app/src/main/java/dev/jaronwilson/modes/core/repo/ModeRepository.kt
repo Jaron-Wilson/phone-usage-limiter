@@ -3,10 +3,12 @@ package dev.jaronwilson.modes.core.repo
 import android.content.Context
 import dev.jaronwilson.modes.core.Defaults
 import dev.jaronwilson.modes.core.db.ModesDatabase
+import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.model.Mode
+import dev.jaronwilson.modes.core.model.pruned
 import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
@@ -127,7 +129,7 @@ class ModeRepository(
         if (ruleDao.notifRuleCount() == 0) Defaults.notifRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.timeRuleCount() == 0) Defaults.timeRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.calendarRuleCount() == 0) Defaults.calendarRules().forEach { ruleDao.upsert(it) }
-        if (folderDao.count() == 0) folderDao.upsertAll(Defaults.folders())
+        if (folderDao.count() == 0) folderDao.upsertAll(seedFolders())
         if (homeDao.count() == 0) homeDao.upsertAll(Defaults.homeEntries())
         settings.setSeeded(true)
     }
@@ -142,8 +144,20 @@ class ModeRepository(
         ruleDao.observeCalendarRules().first().forEach { ruleDao.delete(it) }
         Defaults.calendarRules().forEach { ruleDao.upsert(it) }
         modeDao.getAll().forEach { homeDao.clearMode(it.id) }
-        folderDao.upsertAll(Defaults.folders())
+        folderDao.upsertAll(seedFolders())
         homeDao.upsertAll(Defaults.homeEntries())
+    }
+
+    /**
+     * The shipped folders, cut down to apps this phone actually has.
+     *
+     * The defaults name every app the build knows about, which is the only way
+     * to be useful without knowing whose phone this is. Pruning at seed time
+     * turns that long generic list into a short accurate one, so nobody opens
+     * a Money folder listing twenty banks to find the four they use.
+     */
+    private fun seedFolders() = Defaults.folders().map { folder ->
+        folder.pruned { AppList.isInstalled(context, it) }
     }
 
     suspend fun mode(id: String): Mode? = modeDao.get(id)

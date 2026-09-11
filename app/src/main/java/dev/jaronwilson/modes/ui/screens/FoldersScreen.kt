@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.Folder
+import dev.jaronwilson.modes.core.model.installedCount
+import dev.jaronwilson.modes.core.model.pruned
 import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.ScreenScaffold
@@ -66,17 +68,51 @@ fun FoldersScreen(onDone: () -> Unit) {
             title = "Folders",
             subtitle = "Defined once, switched on per mode."
         ) {
+            val missing = remember(folders) {
+                folders.sumOf { f -> f.packages.count { !AppList.isOpenable(context, it) } }
+            }
+            if (missing > 0) {
+                SectionHeader("Tidy up")
+                Panel {
+                    Text(
+                        "$missing entries across your folders name apps that are not " +
+                            "on this phone. They are already hidden from the home " +
+                            "screen, but they make the counts lie.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                AppGraph.repo.folderDao.upsertAll(
+                                    folders.map { f ->
+                                        f.pruned { AppList.isOpenable(context, it) }
+                                    }
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Remove the $missing that are not installed") }
+                }
+            }
+
             SectionHeader("Library")
             Panel {
                 folders.forEach { folder ->
                     val open = editing == folder.id
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(folder.name, style = MaterialTheme.typography.bodyLarge)
+                            val here = folder.installedCount { AppList.isOpenable(context, it) }
                             Text(
-                                folder.packages.joinToString(", ") {
-                                    AppList.label(context, it)
-                                }.ifBlank { "empty" },
+                                if (here == folder.packages.size) folder.name
+                                else "${folder.name}   $here of ${folder.packages.size} installed",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                folder.packages
+                                    .filter { AppList.isOpenable(context, it) }
+                                    .joinToString(", ") { AppList.label(context, it) }
+                                    .ifBlank { "nothing installed" },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2

@@ -20,7 +20,7 @@ object AppListExport {
 
     /** The whole report, ready to paste or share. */
     suspend fun build(context: Context, repo: ModeRepository): String {
-        val apps = AppList.all(context).sortedBy { it.label.lowercase() }
+        val apps = AppList.installed(context).sortedBy { it.label.lowercase() }
         val folders = repo.folderDao.getAll()
         val modes = repo.modeDao.getAll()
         val width = (apps.maxOfOrNull { it.label.length } ?: 0).coerceAtMost(38)
@@ -28,23 +28,35 @@ object AppListExport {
         return buildString {
             appendLine("# Modes app dump")
             appendLine("# ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
-            appendLine("# ${apps.size} launchable apps, ${folders.size} folders, ${modes.size} modes")
+            val openable = apps.count { it.launchable }
+            appendLine(
+                "# ${apps.size} apps installed, $openable with a launcher icon, " +
+                    "${folders.size} folders, ${modes.size} modes"
+            )
             appendLine()
 
             appendLine("## Installed apps")
+            appendLine("# apps marked 'no icon' are installed but have no launcher entry,")
+            appendLine("# usually because they have been archived.")
             appendLine()
             apps.forEach { app ->
-                appendLine(app.label.padEnd(width + 2) + app.packageName)
+                val note = if (app.launchable) "" else "   no icon"
+                appendLine(app.label.padEnd(width + 2) + app.packageName + note)
             }
 
             appendLine()
             appendLine("## Folders")
             folders.forEach { folder ->
                 appendLine()
-                appendLine("[${folder.name}]  (${folder.packages.size} apps)")
+                val here = folder.packages.count { AppList.isInstalled(context, it) }
+                appendLine("[${folder.name}]  ($here of ${folder.packages.size} installed)")
                 folder.packages.forEach { pkg ->
-                    val installed = if (AppList.isInstalled(context, pkg)) "" else "   NOT INSTALLED"
-                    appendLine("    ${AppList.label(context, pkg).padEnd(width)} $pkg$installed")
+                    val note = when {
+                        !AppList.isInstalled(context, pkg) -> "   NOT INSTALLED"
+                        !AppList.isOpenable(context, pkg) -> "   no icon"
+                        else -> ""
+                    }
+                    appendLine("    ${AppList.label(context, pkg).padEnd(width)} $pkg$note")
                 }
             }
 
@@ -70,7 +82,7 @@ object AppListExport {
 
     /** Just the app table, for the adb script. */
     suspend fun buildAppsOnly(context: Context): String {
-        val apps = AppList.all(context).sortedBy { it.label.lowercase() }
+        val apps = AppList.installed(context).sortedBy { it.label.lowercase() }
         val width = apps.maxOfOrNull { it.label.length } ?: 0
         return buildString {
             appendLine("# ${apps.size} launchable apps")

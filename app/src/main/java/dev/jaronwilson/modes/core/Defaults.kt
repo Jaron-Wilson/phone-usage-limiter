@@ -41,10 +41,30 @@ object Pkg {
     const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
     const val PODCASTS = "com.google.android.apps.podcasts"
     const val AUTHENTICATOR = "com.google.android.apps.authenticator2"
+    const val CALCULATOR = "com.google.android.calculator"
+    const val PLAY_STORE = "com.android.vending"
 
-    // Banking and money. These are the common US apps; yours may differ, so
-    // run tools/pull-apps.sh to see what is actually on the phone and edit the
-    // Money folder in the app.
+    // Messaging and calling beyond the stock apps. These carry real
+    // conversations, so they are classed as direct messages below. Add yours
+    // here if it is missing, or set a rule in the app.
+    const val GROUPME = "com.groupme.android"
+    const val VOICE = "com.google.android.apps.googlevoice"
+    const val MEET = "com.google.android.apps.tachyon"
+
+    // Google's document apps, which arrive as separate packages.
+    const val DOCS = "com.google.android.apps.docs.editors.docs"
+    const val SHEETS = "com.google.android.apps.docs.editors.sheets"
+    const val SLIDES = "com.google.android.apps.docs.editors.slides"
+
+    /** Campus card and meal plan apps. Money, as far as notifications go. */
+    const val EACCOUNTS = "com.blackboard.transact.android.v2"
+    const val HOME_DEPOT = "com.thehomedepot"
+    const val WATCH = "com.google.android.apps.wear.companion"
+    const val YT_STUDIO = "com.google.android.apps.youtube.creator"
+
+    // Banking and money. A broad list of common US apps, not a claim that any
+    // given phone has them: folders are pruned to what is installed when they
+    // are first seeded. Run tools/pull-apps.sh to see what you actually have.
     const val CHASE = "com.chase.sig.android"
     const val BOFA = "com.infonow.bofa"
     const val WELLS_FARGO = "com.wf.wellsfargomobile"
@@ -72,14 +92,14 @@ object Pkg {
     val FINANCE = setOf(
         CHASE, BOFA, WELLS_FARGO, CAPITAL_ONE, CITI, ALLY, DISCOVER, AMEX, USAA,
         PAYPAL, VENMO, CASH_APP, ZELLE, ROBINHOOD, FIDELITY, SCHWAB, CHIME,
-        SOFI, CREDIT_KARMA, WALLET
+        SOFI, CREDIT_KARMA, WALLET, EACCOUNTS
     )
 
     /** Apps that should never be hidden or guarded: you always need a way out. */
     val ESSENTIAL = setOf(DIALER, MESSAGES, CLOCK, SETTINGS, CONTACTS, AUTHENTICATOR)
 
     /** Sensible starting guess for apps worth putting behind friction. */
-    val DISTRACTING = setOf(INSTAGRAM, YOUTUBE, TIKTOK, X, REDDIT)
+    val DISTRACTING = setOf(INSTAGRAM, YOUTUBE, YOUTUBE_MUSIC, TIKTOK, X, REDDIT)
 }
 
 /** The class an app's notifications fall into when no rule matches. */
@@ -90,6 +110,19 @@ val PACKAGE_DEFAULT_CLASS: Map<String, NotifClass> = mapOf(
     Pkg.SIGNAL to NotifClass.DIRECT,
     Pkg.MESSENGER to NotifClass.DIRECT,
     Pkg.SLACK to NotifClass.MENTION,
+    // Real conversations, so they ring through wherever direct messages do.
+    Pkg.GROUPME to NotifClass.DIRECT,
+    Pkg.VOICE to NotifClass.DIRECT,
+    Pkg.MEET to NotifClass.CALL,
+    Pkg.DOCS to NotifClass.OTHER,
+    Pkg.SHEETS to NotifClass.OTHER,
+    Pkg.SLIDES to NotifClass.OTHER,
+    Pkg.DRIVE to NotifClass.OTHER,
+    Pkg.HOME_DEPOT to NotifClass.PROMO,
+    Pkg.PLAY_STORE to NotifClass.SYSTEM,
+    Pkg.WATCH to NotifClass.SYSTEM,
+    // Comments and subscriber counts are engagement, not correspondence.
+    Pkg.YT_STUDIO to NotifClass.SOCIAL,
     Pkg.GMAIL to NotifClass.OTHER,
     Pkg.CALENDAR to NotifClass.OTHER,
     // Instagram's baseline is noise. Rules and the reply-action check below
@@ -136,7 +169,7 @@ object Defaults {
                 NotifClass.CALL, NotifClass.DIRECT, NotifClass.MENTION, NotifClass.FINANCE
             ),
             allowedPackages = setOf(Pkg.CALENDAR),
-            blockedPackages = setOf(Pkg.INSTAGRAM, Pkg.YOUTUBE, Pkg.TIKTOK, Pkg.REDDIT, Pkg.X),
+            blockedPackages = setOf(Pkg.INSTAGRAM, Pkg.YOUTUBE, Pkg.YT_STUDIO),
             // Anything not in a Work folder is off-limits, so an app you install
             // next week does not quietly become a new way to lose an afternoon.
             guardMode = GuardMode.SPEEDBUMP,
@@ -155,7 +188,7 @@ object Defaults {
             // Calls only. A phone that can still be reached in an emergency is
             // a phone you can actually leave face-down.
             allowedClasses = setOf(NotifClass.CALL),
-            blockedPackages = Pkg.DISTRACTING + setOf(Pkg.GMAIL, Pkg.SLACK, Pkg.CHROME),
+            blockedPackages = Pkg.DISTRACTING + setOf(Pkg.GMAIL, Pkg.CHROME, Pkg.YT_STUDIO),
             guardMode = GuardMode.BLOCK,
             guardScope = GuardScope.ALLOWLIST,
             speedbumpSeconds = 20,
@@ -269,6 +302,7 @@ object Defaults {
     const val FOLDER_MEDIA = 5L
     const val FOLDER_TOOLS = 6L
     const val FOLDER_HOUSE = 7L
+    const val FOLDER_PEOPLE = 8L
 
     /**
      * The shared folder library.
@@ -278,32 +312,43 @@ object Defaults {
      */
     fun folders(): List<Folder> = listOf(
         Folder(
-            id = FOLDER_EVERYDAY, sortOrder = 0, name = "Everyday",
+            id = FOLDER_PEOPLE, sortOrder = 0, name = "People",
+            packages = listOf(Pkg.MESSAGES, Pkg.GROUPME, Pkg.VOICE, Pkg.MEET, Pkg.CONTACTS)
+        ),
+        Folder(
+            id = FOLDER_EVERYDAY, sortOrder = 1, name = "Everyday",
             packages = listOf(Pkg.GMAIL, Pkg.MAPS, Pkg.CHROME)
         ),
         Folder(
-            id = FOLDER_WORK, sortOrder = 1, name = "Work",
-            packages = listOf(Pkg.GMAIL, Pkg.SLACK, Pkg.KEEP, Pkg.DRIVE, Pkg.CALENDAR)
+            id = FOLDER_WORK, sortOrder = 2, name = "School",
+            packages = listOf(
+                Pkg.GMAIL, Pkg.CALENDAR, Pkg.DRIVE, Pkg.DOCS, Pkg.SHEETS,
+                Pkg.SLIDES, Pkg.MEET, Pkg.SLACK, Pkg.KEEP, Pkg.EACCOUNTS
+            )
         ),
         Folder(
-            id = FOLDER_MONEY, sortOrder = 2, name = "Money",
+            id = FOLDER_MONEY, sortOrder = 3, name = "Money",
+            // Every money app this build knows about. Seeding prunes it to the
+            // ones actually on the phone, so nobody has to curate this by hand.
             packages = Pkg.FINANCE.toList()
         ),
         Folder(
-            id = FOLDER_SOCIAL, sortOrder = 3, name = "Social",
-            packages = listOf(Pkg.INSTAGRAM, Pkg.X, Pkg.REDDIT, Pkg.TIKTOK)
+            id = FOLDER_SOCIAL, sortOrder = 4, name = "Social",
+            packages = listOf(Pkg.INSTAGRAM, Pkg.X, Pkg.REDDIT, Pkg.TIKTOK, Pkg.YT_STUDIO)
         ),
         Folder(
-            id = FOLDER_MEDIA, sortOrder = 4, name = "Media",
+            id = FOLDER_MEDIA, sortOrder = 5, name = "Media",
             packages = listOf(Pkg.SPOTIFY, Pkg.YOUTUBE, Pkg.YOUTUBE_MUSIC, Pkg.PODCASTS)
         ),
         Folder(
-            id = FOLDER_TOOLS, sortOrder = 5, name = "Tools",
-            packages = listOf(Pkg.KEEP, Pkg.CALENDAR, Pkg.CLOCK, Pkg.AUTHENTICATOR)
+            id = FOLDER_TOOLS, sortOrder = 6, name = "Tools",
+            packages = listOf(
+                Pkg.CLOCK, Pkg.CALCULATOR, Pkg.KEEP, Pkg.AUTHENTICATOR, Pkg.PHOTOS
+            )
         ),
         Folder(
-            id = FOLDER_HOUSE, sortOrder = 6, name = "Odds and ends",
-            packages = listOf(Pkg.PHOTOS, Pkg.WALLET, Pkg.CAMERA)
+            id = FOLDER_HOUSE, sortOrder = 7, name = "Errands",
+            packages = listOf(Pkg.MAPS, Pkg.HOME_DEPOT, Pkg.WALLET, Pkg.WATCH, Pkg.PLAY_STORE)
         )
     )
 
@@ -336,10 +381,13 @@ object Defaults {
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CALENDAR))
                     add(app(Pkg.CAMERA))
+                    add(folder(FOLDER_PEOPLE))
                     add(folder(FOLDER_EVERYDAY))
+                    add(folder(FOLDER_WORK))
                     add(folder(FOLDER_MONEY))
                     add(folder(FOLDER_SOCIAL))
                     add(folder(FOLDER_MEDIA))
+                    add(folder(FOLDER_TOOLS))
                     add(folder(FOLDER_HOUSE))
                 }
             )
@@ -349,10 +397,13 @@ object Defaults {
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CALENDAR))
                     add(folder(FOLDER_WORK))
+                    add(folder(FOLDER_PEOPLE))
                     add(folder(FOLDER_EVERYDAY))
                     add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_TOOLS))
                     add(folder(FOLDER_SOCIAL, on = false))
                     add(folder(FOLDER_MEDIA, on = false))
+                    add(folder(FOLDER_HOUSE, on = false))
                 }
             )
             addAll(
@@ -362,9 +413,12 @@ object Defaults {
                     add(app(Pkg.CLOCK))
                     add(folder(FOLDER_TOOLS))
                     add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_WORK, on = false))
+                    add(folder(FOLDER_PEOPLE, on = false))
                     add(folder(FOLDER_EVERYDAY, on = false))
                     add(folder(FOLDER_SOCIAL, on = false))
                     add(folder(FOLDER_MEDIA, on = false))
+                    add(folder(FOLDER_HOUSE, on = false))
                 }
             )
             addAll(
@@ -373,11 +427,14 @@ object Defaults {
                     add(app(Pkg.MESSAGES))
                     add(app(Pkg.CALENDAR))
                     add(app(Pkg.CAMERA))
+                    add(folder(FOLDER_PEOPLE))
                     add(folder(FOLDER_EVERYDAY))
                     add(folder(FOLDER_MONEY))
                     add(folder(FOLDER_SOCIAL))
                     add(folder(FOLDER_MEDIA))
+                    add(folder(FOLDER_TOOLS))
                     add(folder(FOLDER_HOUSE))
+                    add(folder(FOLDER_WORK, on = false))
                 }
             )
             addAll(
@@ -386,8 +443,10 @@ object Defaults {
                     add(app(Pkg.DIALER))
                     add(app(Pkg.MESSAGES))
                     add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_PEOPLE, on = false))
                     add(folder(FOLDER_SOCIAL, on = false))
                     add(folder(FOLDER_MEDIA, on = false))
+                    add(folder(FOLDER_HOUSE, on = false))
                 }
             )
         }
@@ -464,6 +523,14 @@ object Defaults {
                 "balance|you (paid|received|sent)|charged \\$|\\bautopay\\b)\\b",
             target = NotifClass.FINANCE,
             priority = 120, note = "Ordinary money movement"
+        ),
+
+        // ---- campus ----
+        NotifRule(
+            packageName = Pkg.EACCOUNTS,
+            pattern = "(?i)\\b(balance|low|added|deposit|declined|meal|swipe|plan)\\b",
+            target = NotifClass.FINANCE,
+            priority = 125, note = "Campus card"
         ),
 
         // ---- generic noise ----

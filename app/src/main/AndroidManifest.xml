@@ -13,8 +13,13 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
 
-    <!-- Needed so the launcher can enumerate apps and the guard can name the
-         foreground app. Covers anything with a launcher entry. -->
+    <!-- A launcher has to be able to list what is installed, including apps
+         that have been archived and so have no launcher entry of their own.
+         The <queries> block below is not enough for that. This app is
+         sideloaded, so Play's restrictions on this permission do not apply. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
