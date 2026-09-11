@@ -10,6 +10,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import dev.jaronwilson.modes.AppGraph
@@ -61,6 +66,28 @@ fun ModesScreen(onEdit: (String) -> Unit, onEditFolders: () -> Unit) {
                 )
                 OutlinedButton(onClick = onEditFolders, modifier = Modifier.fillMaxWidth()) {
                     Text("Edit the folder library")
+                }
+            }
+
+            SectionHeader("Tidy up")
+            Panel {
+                var removed by remember { mutableStateOf(-1) }
+                Text(
+                    "Removes rows that say the same thing twice, keeping the one you " +
+                        "have been arranging. Nothing you set by hand is lost."
+                )
+                OutlinedButton(
+                    onClick = {
+                        scope.launch { removed = AppGraph.repo.dedupeHomeEntries() }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Remove duplicate rows") }
+                if (removed >= 0) {
+                    Text(
+                        if (removed == 0) "Nothing duplicated." else "Removed $removed.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 

@@ -1,5 +1,6 @@
 package dev.jaronwilson.modes.launcher
 
+import android.app.AlarmManager
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
@@ -129,10 +130,17 @@ private fun Home() {
         resolveHomeRows(entries, folders).filter { it.entry.enabled && it.packages.isNotEmpty() }
     }
 
+    // The system's next alarm, the same one the status bar shows. Read on the
+    // clock tick rather than watched: it is a cheap call and an alarm you set
+    // thirty seconds ago is not urgent to display.
+    val alarmManager = remember { context.getSystemService(AlarmManager::class.java) }
+    var nextAlarm by remember { mutableStateOf<AlarmManager.AlarmClockInfo?>(null) }
+
     var clock by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
             clock = LocalDateTime.now()
+            nextAlarm = runCatching { alarmManager?.nextAlarmClock }.getOrNull()
             delay(10_000)
         }
     }
@@ -327,6 +335,42 @@ private fun Home() {
                 }
             }
         }
+    }
+}
+
+/**
+ * The next alarm, phrased the way you would say it out loud.
+ *
+ * Taken from the system rather than kept here, so it is whatever the Clock app
+ * has set, including a nap timer someone else's app created. Tapping opens
+ * whichever app owns it.
+ */
+@Composable
+private fun AlarmLine(alarm: AlarmManager.AlarmClockInfo) {
+    val zone = ZoneId.systemDefault()
+    val at = Instant.ofEpochMilli(alarm.triggerTime).atZone(zone)
+    val today = LocalDate.now(zone)
+    val whenText = when (at.toLocalDate()) {
+        today -> DateTimeFormatter.ofPattern("H:mm").format(at)
+        today.plusDays(1) -> DateTimeFormatter.ofPattern("H:mm").format(at) + " tomorrow"
+        else -> DateTimeFormatter.ofPattern("H:mm EEE").format(at)
+    }
+    val hoursAway = (alarm.triggerTime - System.currentTimeMillis()) / 3_600_000
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickable {
+            runCatching { alarm.showIntent?.send() }
+        }
+    ) {
+        Text("alarm", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            whenText,
+            fontSize = 14.sp,
+            // Something going off within the hour is worth noticing.
+            color = if (hoursAway < 1) Accent else InkDim
+        )
     }
 }
 

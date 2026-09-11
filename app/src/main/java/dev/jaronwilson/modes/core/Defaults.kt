@@ -382,12 +382,24 @@ object Defaults {
      * Single apps sit at the top level, because a folder you open twenty times
      * a day is just friction. Everything else is grouped.
      */
+    /** First id reserved for a mode's shipped rows. Fifty is plenty per mode. */
+    private fun seededRowBase(modeId: String): Long =
+        (listOf(MODE_OPEN, MODE_WORK, MODE_SCHOOL, MODE_FOCUS, MODE_PERSONAL, MODE_SLEEP)
+            .indexOf(modeId)
+            .coerceAtLeast(0) + 1) * 50L
+
     fun homeEntries(): List<HomeEntry> {
 
+        // Seeded rows get fixed ids derived from the mode, so seeding twice
+        // overwrites instead of inserting a second copy of everything. Rows you
+        // add yourself keep auto-generated ids, which start above these.
         fun layout(modeId: String, build: MutableList<HomeEntry>.() -> Unit): List<HomeEntry> {
             val rows = mutableListOf<HomeEntry>()
             rows.build()
-            return rows.mapIndexed { i, e -> e.copy(modeId = modeId, sortOrder = i) }
+            val base = seededRowBase(modeId)
+            return rows.mapIndexed { i, e ->
+                e.copy(id = base + i, modeId = modeId, sortOrder = i)
+            }
         }
 
         fun app(pkg: String) = HomeEntry(modeId = "", packageName = pkg)

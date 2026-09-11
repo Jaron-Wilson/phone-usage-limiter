@@ -57,6 +57,20 @@ fun FoldersScreen(onDone: () -> Unit) {
     val apps = remember { AppList.all(context, withIcons = true) }
 
     var editing by remember { mutableStateOf<Long?>(null) }
+
+    fun reorder(folder: dev.jaronwilson.modes.core.model.Folder, delta: Int) {
+        val list = folders.sortedBy { it.sortOrder }.toMutableList()
+        val from = list.indexOfFirst { it.id == folder.id }
+        val to = from + delta
+        if (from < 0 || to !in list.indices) return
+        list.add(to, list.removeAt(from))
+        scope.launch {
+            AppGraph.repo.folderDao.upsertAll(
+                list.mapIndexed { i, f -> f.copy(sortOrder = i) }
+            )
+        }
+    }
+
     var newName by remember { mutableStateOf("") }
     var pickerQuery by remember { mutableStateOf("") }
 
@@ -67,7 +81,8 @@ fun FoldersScreen(onDone: () -> Unit) {
     ) {
         ScreenScaffold(
             title = "Folders",
-            subtitle = "Defined once, switched on per mode."
+            subtitle = "Defined once, switched on per mode. Rename them, change what " +
+                "is inside, and set the order they appear in."
         ) {
             val missing = remember(folders) {
                 folders.sumOf { f -> f.packages.count { !AppList.isOpenable(context, it) } }
@@ -119,6 +134,8 @@ fun FoldersScreen(onDone: () -> Unit) {
                                 maxLines = 2
                             )
                         }
+                        TextButton(onClick = { reorder(folder, -1) }) { Text("up") }
+                        TextButton(onClick = { reorder(folder, 1) }) { Text("down") }
                         TextButton(onClick = {
                             editing = if (open) null else folder.id
                             pickerQuery = ""
@@ -157,6 +174,55 @@ fun FoldersScreen(onDone: () -> Unit) {
                                 .take(40)
                             inside + rest
                         }
+                        if (folder.packages.size > 1) {
+                            Text(
+                                "Order inside the folder",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            folder.packages.forEachIndexed { index, pkg ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        AppList.label(context, pkg),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(
+                                        enabled = index > 0,
+                                        onClick = {
+                                            val moved = folder.packages.toMutableList()
+                                            moved.add(index - 1, moved.removeAt(index))
+                                            scope.launch {
+                                                AppGraph.repo.folderDao.upsert(
+                                                    folder.copy(packages = moved)
+                                                )
+                                            }
+                                        }
+                                    ) { Text("up") }
+                                    TextButton(
+                                        enabled = index < folder.packages.size - 1,
+                                        onClick = {
+                                            val moved = folder.packages.toMutableList()
+                                            moved.add(index + 1, moved.removeAt(index))
+                                            scope.launch {
+                                                AppGraph.repo.folderDao.upsert(
+                                                    folder.copy(packages = moved)
+                                                )
+                                            }
+                                        }
+                                    ) { Text("down") }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Text(
+                            "Tap to add or remove",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             shown.forEach { app ->
                                 val inside = app.packageName in folder.packages

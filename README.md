@@ -77,7 +77,9 @@ Money folder arrives listing your banks rather than twenty you have never heard
 of, without anyone having to curate it by hand. `Folders > Tidy up` does the
 same again later, after you install or remove things.
 
-Edit contents once under **Modes > Edit the folder library**. Flip switches per
+Edit contents, rename, reorder the folders, and reorder the apps inside each
+one under **Modes > Edit the folder library**. The first app in a folder is the
+one under your thumb when it opens, so that order is worth setting. Flip switches per
 mode under **Modes > (a mode) > Arrange home screen**, or long-press any folder
 on the home screen to land straight on its switches.
 
@@ -94,6 +96,8 @@ folder from the library:
 9:41
 Thursday 11 September
 ◑ Work   Sprint planning
+
+alarm   6:30 tomorrow
 
 NOW
 Sprint planning
@@ -115,6 +119,10 @@ Money       9
 
 everything else
 ```
+
+The next alarm is the system's own, the same one in the status bar, so it
+includes timers other apps set. It turns gold within the hour, and tapping
+opens whichever app owns it.
 
 Tap a folder to expand it in place, long-press to edit which folders this mode
 uses. Tomorrow is shown in a quieter weight below today, so the evening
@@ -656,5 +664,6 @@ hardest to debug on a phone:
 - **`StatsTest`** - reconstructing time-per-mode from the change log.
 - **`AgendaDayTest`** - which day an event belongs to, all-day events included.
 - **`CommuteTest`** - working backwards to the moment you have to leave.
+- **`DuplicateRowsTest`** - repairing a home screen that seeded itself twice.
 
-73 tests, all passing.
+81 tests, all passing.

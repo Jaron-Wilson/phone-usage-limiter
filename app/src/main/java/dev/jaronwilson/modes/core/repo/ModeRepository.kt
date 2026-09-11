@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Everything a decision needs, in one immutable object.
@@ -130,14 +132,40 @@ class ModeRepository(
     /** Blocking-safe read for services that start before the cache warms up. */
     suspend fun policyNow(): PolicySnapshot? = snapshot ?: policy.first()
 
-    suspend fun seedIfEmpty() {
+    private val seedLock = Mutex()
+
+    /**
+     * Seeding is single-flight.
+     *
+     * Three components race to call this at startup: the application, the
+     * notification listener when the system binds it, and the boot receiver.
+     * Without the lock, two of them can both observe an empty table and both
+     * insert, which is how every home row ended up on screen twice.
+     */
+    suspend fun seedIfEmpty() = seedLock.withLock { seedIfEmptyLocked() }
+
+    private suspend fun seedIfEmptyLocked() {
         if (modeDao.count() == 0) modeDao.upsertAll(Defaults.modes())
         if (ruleDao.notifRuleCount() == 0) Defaults.notifRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.timeRuleCount() == 0) Defaults.timeRules().forEach { ruleDao.upsert(it) }
         if (ruleDao.calendarRuleCount() == 0) Defaults.calendarRules().forEach { ruleDao.upsert(it) }
         if (folderDao.count() == 0) folderDao.upsertAll(seedFolders())
         if (homeDao.count() == 0) homeDao.upsertAll(Defaults.homeEntries())
+        dedupeHomeEntries()
         settings.setSeeded(true)
+    }
+
+    /**
+     * Removes rows that say the same thing twice, keeping the earliest of each.
+     *
+     * Repairs phones that seeded twice before the lock existed, without
+     * throwing away anything the owner arranged by hand.
+     */
+    suspend fun dedupeHomeEntries(): Int {
+        val all = homeDao.observeAll().first()
+        val duplicates = findDuplicates(all)
+        duplicates.forEach { homeDao.delete(it) }
+        return duplicates.size
     }
 
     /** Reset rules and modes to the shipped defaults, keeping held history. */
@@ -171,3 +199,17 @@ class ModeRepository(
     suspend fun defaultMode(): Mode =
         modeDao.getDefault() ?: modeDao.getAll().first()
 }
+
+/**
+ * Given every home row, the ones to delete so each mode holds each app or
+ * folder once. The survivor is the lowest id, which is the one whose position
+ * and switch the owner has been looking at.
+ *
+ * Pure, so the repair can be tested without a database.
+ */
+fun findDuplicates(entries: List<HomeEntry>): List<HomeEntry> =
+    entries
+        .groupBy { Triple(it.modeId, it.packageName, it.folderId) }
+        .values
+        .filter { it.size > 1 }
+        .flatMap { group -> group.sortedBy { it.id }.drop(1) }
