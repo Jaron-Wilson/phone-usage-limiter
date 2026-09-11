@@ -243,6 +243,23 @@ Add names under Rules. They are matched against the sender name on the
 notification, so one entry covers that person across texts, WhatsApp and
 Instagram DMs at once. A match overrides the mode entirely.
 
+### "Nothing on the calendar" when there plainly is
+
+The app reads the phone's own calendar store, the one Android keeps for every
+calendar app to share. It cannot see events that live only inside an app. So:
+
+- **Google Calendar:** Settings > Passwords & accounts > the account > Account
+  sync > **Calendar** must be on. Nine Google accounts with that switch off is
+  a store with nothing in it.
+- **Outlook:** Outlook > Settings > the account > **Sync calendars**. Off by
+  default, and school and work accounts almost always live here.
+- **Private space:** an app installed in the private space keeps its data in a
+  separate user that Modes cannot read.
+
+The home screen and the Now tab now say which of these it is: "no calendar is
+synced to this phone" is a different problem from "nothing today", and it is
+labelled as such, with a tap through to account sync settings.
+
 ## Activating it
 
 Editing is in the app. The simple part only starts when Modes becomes the home
@@ -272,9 +289,24 @@ out to be the one number that matters.
 
 ## Screenshots
 
-Captured from a real phone rather than an emulator, because the app's whole job
-is reacting to your calendar and your notifications, and an emulator has
-neither.
+Taken on a Pixel 8a over adb, from the app as it actually runs. Screens that
+would show a real bank list, app inventory or screen time are left out of the
+repo on purpose; take your own with the script below.
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="270" alt="The home screen: black, the time, the running mode, today's calendar, then folders" />
+  <img src="docs/screenshots/now.png" width="270" alt="Now: the running mode and why, switch by hand, what is waiting, today" />
+  <img src="docs/screenshots/modes.png" width="270" alt="Modes: the five modes and what each lets through" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/rules.png" width="270" alt="Rules: people who always get through, calendar rules, time of day rules" />
+  <img src="docs/screenshots/digest.png" width="270" alt="Waiting: what is being held, and the last 24 hours" />
+</p>
+
+Left to right: the home screen (this is the whole point), the Now tab, the mode
+list, the rules, and the waiting room.
+
+### Taking your own
 
 ```bash
 ./tools/screenshots.sh          # walks through every screen

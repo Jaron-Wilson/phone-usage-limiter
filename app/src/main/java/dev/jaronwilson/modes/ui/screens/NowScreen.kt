@@ -203,6 +203,10 @@ fun NowScreen(onOpenModes: () -> Unit) {
 
             SectionHeader("Today")
             Panel {
+                val calendarCount by produceState(initialValue = -1) {
+                    value = runCatching { AppGraph.scheduler.calendar.calendars().size }.getOrDefault(0)
+                }
+                val hasCalendarPermission = AppGraph.scheduler.calendar.hasPermission
                 val events by produceState(initialValue = emptyList<String>()) {
                     val now = System.currentTimeMillis()
                     value = AppGraph.scheduler.calendar
@@ -215,13 +219,40 @@ fun NowScreen(onOpenModes: () -> Unit) {
                             "$t  ${it.title}"
                         }
                 }
-                if (events.isEmpty()) {
-                    Text(
-                        "No upcoming events, or calendar access is off.",
+                when {
+                    !hasCalendarPermission -> Text(
+                        "Calendar access is off. Grant it under Permissions below.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    calendarCount == 0 -> {
+                        Text(
+                            "No calendar is synced to this phone, so there is nothing to " +
+                                "read. If your events are in Google Calendar, turn on Calendar " +
+                                "under that account's sync settings. If they are in Outlook, turn " +
+                                "on \"Sync calendars\" in Outlook's account settings.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_SYNC_SETTINGS)
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Open account sync settings") }
+                    }
+                    events.isEmpty() -> Text(
+                        "Nothing more on the calendar today." +
+                            if (calendarCount > 0) " $calendarCount calendars synced." else "",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                } else {
+                }
+                if (events.isNotEmpty()) {
                     events.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 }
             }

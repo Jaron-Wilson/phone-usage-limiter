@@ -30,6 +30,7 @@ import dev.jaronwilson.modes.core.model.GuardScope
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifClass
 import dev.jaronwilson.modes.launcher.AppList
+import dev.jaronwilson.modes.ui.AppIcon
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
@@ -45,7 +46,7 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
 
     LaunchedEffect(modeId) { mode = AppGraph.repo.mode(modeId) }
 
-    val apps = remember { AppList.all(context) }
+    val apps = remember { AppList.all(context, withIcons = true) }
     val current = mode ?: return
 
     fun update(block: (Mode) -> Mode) {
@@ -108,8 +109,26 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                var blockQuery by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = blockQuery,
+                    onValueChange = { blockQuery = it },
+                    label = { Text("Find an app") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                // Chosen ones first so they are never scrolled out of sight,
+                // then whatever matches the search. A phone with a hundred apps
+                // cannot be edited from an alphabetical slice of sixty.
+                val shown = remember(blockQuery, apps, current.blockedPackages) {
+                    val chosen = apps.filter { it.packageName in current.blockedPackages }
+                    val rest = apps.filter { it.packageName !in current.blockedPackages }
+                        .filter { blockQuery.isBlank() || it.label.contains(blockQuery, ignoreCase = true) }
+                        .take(40)
+                    chosen + rest
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    apps.take(60).forEach { app ->
+                    shown.forEach { app ->
                         val on = app.packageName in current.blockedPackages
                         FilterChip(
                             selected = on,
@@ -121,7 +140,8 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
                                     )
                                 }
                             },
-                            label = { Text(app.label) }
+                            label = { Text(app.label) },
+                            leadingIcon = { AppIcon(app.icon) }
                         )
                     }
                 }

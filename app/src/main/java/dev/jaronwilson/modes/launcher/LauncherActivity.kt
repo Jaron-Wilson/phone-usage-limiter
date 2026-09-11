@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.CalendarContract
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -134,6 +135,21 @@ private fun Home() {
         }
     }
 
+    // Whether there is any calendar to read at all. "Nothing today" and "no
+    // calendar is synced to this phone" need different fixes, so they must not
+    // share a message.
+    val calendarState by produceState(initialValue = CalendarState.OK) {
+        while (true) {
+            val src = AppGraph.scheduler.calendar
+            value = when {
+                !src.hasPermission -> CalendarState.NO_PERMISSION
+                runCatching { src.calendars().isEmpty() }.getOrDefault(false) -> CalendarState.NO_CALENDARS
+                else -> CalendarState.OK
+            }
+            delay(5 * 60_000L)
+        }
+    }
+
     // Refreshed on its own clock: the calendar changes far less often than the
     // minute does, and querying the provider is not free.
     val events by produceState(initialValue = emptyList<CalEvent>()) {
@@ -214,7 +230,7 @@ private fun Home() {
 
             if (!showAll) {
                 Spacer(Modifier.height(24.dp))
-                Agenda(events)
+                Agenda(events, calendarState)
             }
 
             Spacer(Modifier.height(28.dp))
@@ -279,8 +295,10 @@ private fun Home() {
  * the rest of today. Reading this should answer "what am I meant to be doing"
  * without opening anything.
  */
+private enum class CalendarState { OK, NO_PERMISSION, NO_CALENDARS }
+
 @Composable
-private fun Agenda(events: List<CalEvent>) {
+private fun Agenda(events: List<CalEvent>, state: CalendarState) {
     val context = LocalContext.current
     val now = System.currentTimeMillis()
     val fmt = DateTimeFormatter.ofPattern("H:mm")
@@ -318,8 +336,38 @@ private fun Agenda(events: List<CalEvent>) {
                 )
                 Text("at ${t(next.begin)}", fontSize = 14.sp, color = InkDim)
             }
+            state == CalendarState.NO_PERMISSION -> {
+                Text(
+                    "Calendar access is off. Tap to fix.",
+                    fontSize = 15.sp, color = InkDim,
+                    modifier = Modifier.clickable {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                    .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                )
+            }
+            state == CalendarState.NO_CALENDARS -> {
+                // The usual cause: events live in Outlook or a Google account
+                // whose calendar sync is off, so the phone's own store is empty.
+                Text(
+                    "No calendar is synced to this phone. Tap to check account sync.",
+                    fontSize = 15.sp, color = InkDim,
+                    modifier = Modifier.clickable {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_SYNC_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    }
+                )
+            }
             else -> {
-                Text("Nothing on the calendar", fontSize = 15.sp, color = InkFaint)
+                Text("Nothing on the calendar today", fontSize = 15.sp, color = InkFaint)
             }
         }
 
