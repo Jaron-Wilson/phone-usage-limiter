@@ -2,6 +2,7 @@ package dev.jaronwilson.modes.schedule
 
 import android.Manifest
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
@@ -81,6 +82,34 @@ class CalendarSource(private val context: Context) {
                 }
             }.orEmpty()
         }.onFailure { Log.w(TAG, "calendars() failed", it) }.getOrDefault(emptyList())
+    }
+
+    /**
+     * Turn one calendar's sync on or off.
+     *
+     * Two columns, not one. VISIBLE decides whether calendar apps draw it;
+     * SYNC_EVENTS decides whether its events are on the phone at all. Setting
+     * only the first gives you a calendar that is meant to be shown and has
+     * nothing in it.
+     *
+     * Worth having because Google Calendar's own settings no longer expose
+     * this, so a calendar can be switched on there and still absent here.
+     */
+    fun setSynced(calendarId: Long, on: Boolean): Boolean = runCatching {
+        val values = ContentValues().apply {
+            put(CalendarContract.Calendars.VISIBLE, if (on) 1 else 0)
+            put(CalendarContract.Calendars.SYNC_EVENTS, if (on) 1 else 0)
+        }
+        val uri = ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId)
+        context.contentResolver.update(uri, values, null, null) > 0
+    }.onFailure { Log.w(TAG, "could not change sync for calendar $calendarId", it) }
+        .getOrDefault(false)
+
+    /** How many events a calendar has in the next [days] days. Cheap enough to show. */
+    fun eventCount(calendarId: Long, days: Int = 14): Int {
+        if (!hasPermission) return 0
+        val now = System.currentTimeMillis()
+        return events(now, now + days * 24L * 60 * 60 * 1000).count { it.calendarId == calendarId }
     }
 
     /**

@@ -260,6 +260,20 @@ Add names under Rules. They are matched against the sender name on the
 notification, so one entry covers that person across texts, WhatsApp and
 Instagram DMs at once. A match overrides the mode entirely.
 
+### Calendars that are on but empty
+
+**Rules > Calendars on this phone** lists every calendar the provider knows
+about with a switch and a count of its events. Two columns govern this and only
+one is obvious: `VISIBLE` decides whether calendar apps draw it, `SYNC_EVENTS`
+decides whether its events are on the device at all. The switch sets both,
+because setting only the first leaves you with a calendar that is meant to be
+shown and has nothing in it.
+
+This exists because current Google Calendar builds no longer expose the
+setting, so a shared or subscribed calendar can be ticked there and still be
+entirely absent from the phone. School calendars fed from Canvas are the common
+casualty.
+
 ### "Nothing on the calendar" when there plainly is
 
 The app reads the phone's own calendar store, the one Android keeps for every

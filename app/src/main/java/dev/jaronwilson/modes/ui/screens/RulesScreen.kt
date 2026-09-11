@@ -34,6 +34,7 @@ import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.RowItem
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
+import androidx.compose.runtime.produceState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -104,6 +105,52 @@ fun RulesScreen() {
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Add") }
+            }
+
+            SectionHeader("Calendars on this phone")
+            Panel {
+                Text(
+                    "Only calendars switched on here have their events on the phone " +
+                        "at all, which is what this app and every widget read. Google " +
+                        "Calendar no longer exposes this, so a calendar can look enabled " +
+                        "there and still be missing.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                var calTick by remember { mutableStateOf(0) }
+                val calendars by produceState(initialValue = emptyList<CalRow>(), calTick) {
+                    val src = AppGraph.scheduler.calendar
+                    value = src.calendars()
+                        .map { CalRow(it.id, it.name, it.account, it.syncEvents, src.eventCount(it.id)) }
+                        .sortedWith(compareByDescending<CalRow> { it.synced }.thenBy { it.name.lowercase() })
+                }
+                if (calendars.isEmpty()) {
+                    Text(
+                        "No calendars found. Grant calendar access, or see the Now tab.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                calendars.forEach { cal ->
+                    RowItem(
+                        title = cal.name,
+                        subtitle = buildString {
+                            append(cal.account)
+                            if (cal.synced) append(" · ${cal.events} events in the next fortnight")
+                        },
+                        trailing = {
+                            Switch(
+                                checked = cal.synced,
+                                onCheckedChange = { on ->
+                                    scope.launch {
+                                        AppGraph.scheduler.calendar.setSynced(cal.id, on)
+                                        calTick++
+                                        AppGraph.scheduler.reevaluate("calendar sync changed")
+                                    }
+                                }
+                            )
+                        }
+                    )
+                }
             }
 
             SectionHeader("Events worth noticing")
@@ -282,3 +329,12 @@ private fun daysLabel(mask: Int): String {
         else -> on.joinToString(" ")
     }
 }
+
+/** One row of the calendar list, resolved off the main thread. */
+private data class CalRow(
+    val id: Long,
+    val name: String,
+    val account: String,
+    val synced: Boolean,
+    val events: Int
+)

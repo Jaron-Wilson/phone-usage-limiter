@@ -175,6 +175,7 @@ object Perms {
 
     val runtimePermissions: Array<String> = buildList {
         add(Manifest.permission.READ_CALENDAR)
+        add(Manifest.permission.WRITE_CALENDAR)
         add(Manifest.permission.READ_CONTACTS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)

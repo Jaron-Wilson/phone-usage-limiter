@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Only ever used to switch a calendar's own sync on or off, never to
+         create, change or delete an event. -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- To repair a calendar account that Android reports as enabled while
          refusing to sync it. Both are install-time permissions. -->
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
