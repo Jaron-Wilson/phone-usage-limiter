@@ -56,13 +56,40 @@ fi
 mkdir -p "$OUT"
 wanted=("$@")
 
+# Which app owns what is on screen right now. A woken screen is not an
+# unlocked one, and once Modes is the default home it is always "top" even
+# behind the keyguard, so the activity stack cannot be trusted for this. The
+# accessibility tree can: it describes what is actually visible.
+front_package() {
+    "$ADB" shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    "$ADB" shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r' \
+        | grep -oE 'package="[^"]+"' | sort | uniq -c | sort -rn | head -1 \
+        | grep -oE '"[^"]+"' | tr -d '"'
+}
+
 capture() {
     local name="$1" what="$2"
     printf '\n  %s\n  %s\n' "$name" "$what"
     printf '  press Enter to capture, s to skip: '
     read -r reply </dev/tty
     [ "$reply" = "s" ] && { printf '  skipped\n'; return; }
+    local front
+    front=$(front_package)
+    if [ "$front" != "$PKG" ]; then
+        printf '  refused: "%s" is on screen, not Modes. Locked, or another app in front.\n' "${front:-nothing}"
+        return
+    fi
     "$ADB" exec-out screencap -p > "$OUT/$name.png"
+    # Drop the status bar: it carries the clock, and contact avatars from
+    # notification icons, neither of which belongs in a README.
+    if python3 -c 'import PIL' >/dev/null 2>&1; then
+        python3 - "$OUT/$name.png" <<'PYEOF'
+import sys
+from PIL import Image
+p = sys.argv[1]; im = Image.open(p)
+im.crop((0, 110, im.width, im.height)).save(p)
+PYEOF
+    fi
     # Full resolution is far too heavy for a README.
     if command -v magick >/dev/null 2>&1; then
         magick "$OUT/$name.png" -resize 420x "$OUT/$name.png"
