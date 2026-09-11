@@ -256,7 +256,15 @@ calendar app to share. It cannot see events that live only inside an app. So:
 - **Private space:** an app installed in the private space keeps its data in a
   separate user that Modes cannot read.
 
-The home screen and the Now tab now say which of these it is: "no calendar is
+The dump (Now > Dump your app list) has a Calendar section that shows exactly
+what the app can read: whether permission is granted, every calendar in the
+phone's store with its account type and sync flags, and the events in the next
+24 hours. Zero calendars there with Google Calendar happily showing events is
+the signature of the account-level Calendar sync switch being off: Google's app
+syncs through its own pipeline regardless, but only that switch fills the
+system store that everything else reads.
+
+The home screen and the Now tab say which of these it is: "no calendar is
 synced to this phone" is a different problem from "nothing today", and it is
 labelled as such, with a tap through to account sync settings.
 

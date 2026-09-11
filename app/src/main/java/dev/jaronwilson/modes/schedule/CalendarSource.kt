@@ -19,7 +19,14 @@ data class CalEvent(
     val busy: Boolean
 )
 
-data class CalendarInfo(val id: Long, val name: String, val account: String)
+data class CalendarInfo(
+    val id: Long,
+    val name: String,
+    val account: String,
+    val accountType: String = "",
+    val visible: Boolean = true,
+    val syncEvents: Boolean = true
+)
 
 /** Thin read-only wrapper over the system calendar provider. */
 class CalendarSource(private val context: Context) {
@@ -34,7 +41,10 @@ class CalendarSource(private val context: Context) {
         val proj = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
-            CalendarContract.Calendars.ACCOUNT_NAME
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.ACCOUNT_TYPE,
+            CalendarContract.Calendars.VISIBLE,
+            CalendarContract.Calendars.SYNC_EVENTS
         )
         return runCatching {
             context.contentResolver.query(
@@ -42,7 +52,16 @@ class CalendarSource(private val context: Context) {
             )?.use { c ->
                 buildList {
                     while (c.moveToNext()) {
-                        add(CalendarInfo(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: ""))
+                        add(
+                            CalendarInfo(
+                                id = c.getLong(0),
+                                name = c.getString(1) ?: "",
+                                account = c.getString(2) ?: "",
+                                accountType = c.getString(3) ?: "",
+                                visible = c.getInt(4) == 1,
+                                syncEvents = c.getInt(5) == 1
+                            )
+                        )
                     }
                 }
             }.orEmpty()

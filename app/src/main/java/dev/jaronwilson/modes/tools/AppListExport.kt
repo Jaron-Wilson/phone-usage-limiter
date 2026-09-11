@@ -5,6 +5,10 @@ import android.os.Build
 import dev.jaronwilson.modes.core.repo.ModeRepository
 import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.launcher.AppList
+import dev.jaronwilson.modes.schedule.CalendarSource
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.io.File
 
 /**
@@ -42,6 +46,31 @@ object AppListExport {
             apps.forEach { app ->
                 val note = if (app.launchable) "" else "   no icon"
                 appendLine(app.label.padEnd(width + 2) + app.packageName + note)
+            }
+
+            appendLine()
+            appendLine("## Calendar")
+            appendLine("# What the app itself can read from the phone's calendar store.")
+            val cal = CalendarSource(context)
+            if (!cal.hasPermission) {
+                appendLine("READ_CALENDAR: not granted")
+            } else {
+                val cals = cal.calendars()
+                appendLine("READ_CALENDAR: granted, ${cals.size} calendars in the store")
+                cals.forEach { c ->
+                    appendLine(
+                        "    #${c.id} ${c.name.ifBlank { "(unnamed)" }}  account=${mask(c.account)} " +
+                            "type=${c.accountType}  visible=${c.visible}  syncEvents=${c.syncEvents}"
+                    )
+                }
+                val now = System.currentTimeMillis()
+                val soon = cal.events(now - 60 * 60_000L, now + 24 * 60 * 60_000L)
+                appendLine("events in the next 24h: ${soon.size}")
+                val fmt = DateTimeFormatter.ofPattern("EEE HH:mm")
+                soon.take(6).forEach { e ->
+                    val t = fmt.format(Instant.ofEpochMilli(e.begin).atZone(ZoneId.systemDefault()))
+                    appendLine("    $t  ${e.title.take(40)}  (calendar #${e.calendarId}, allDay=${e.allDay}, busy=${e.busy})")
+                }
             }
 
             appendLine()
@@ -108,6 +137,13 @@ object AppListExport {
         File(dir, "apps.txt").writeText(buildAppsOnly(context))
         File(dir, "apps.json").writeText(buildJson(context))
         return report
+    }
+
+    /** Account names are email addresses; the dump gets pasted places. */
+    private fun mask(account: String): String {
+        val at = account.indexOf('@')
+        if (at <= 0) return account.ifBlank { "?" }
+        return account.take(2) + "***" + account.substring(at)
     }
 
     private fun quote(s: String): String =
