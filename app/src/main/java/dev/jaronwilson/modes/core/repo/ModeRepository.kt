@@ -34,7 +34,9 @@ data class PolicySnapshot(
     val gateEnabled: Boolean,
     val guardEnabled: Boolean,
     /** The active mode's home screen, in order, folders resolved. */
-    val homeRows: List<HomeRow> = emptyList()
+    val homeRows: List<HomeRow> = emptyList(),
+    /** Apps exempt from every mode's guard, set by hand. */
+    val alwaysAllowed: Set<String> = emptySet()
 ) {
     /**
      * Every package reachable from the current home screen. Under
@@ -89,8 +91,9 @@ class ModeRepository(
             settings.gateEnabled,
             settings.guardEnabled,
             homeDao.observeAll(),
-            folderDao.observeAll()
-        ) { gate, guard, home, folders -> Extras(gate, guard, home, folders) }
+            folderDao.observeAll(),
+            settings.alwaysAllowed
+        ) { gate, guard, home, folders, allowed -> Extras(gate, guard, home, folders, allowed) }
     ) { active, allModes, rules, vips, extra ->
         val mode = allModes.firstOrNull { it.id == active.modeId }
             ?: allModes.firstOrNull { it.isDefault }
@@ -105,7 +108,8 @@ class ModeRepository(
             homeRows = resolveHomeRows(
                 extra.home.filter { it.modeId == mode.id },
                 extra.folders
-            )
+            ),
+            alwaysAllowed = extra.allowed
         )
     }
 
@@ -113,7 +117,8 @@ class ModeRepository(
         val gate: Boolean,
         val guard: Boolean,
         val home: List<HomeEntry>,
-        val folders: List<Folder>
+        val folders: List<Folder>,
+        val allowed: Set<String>
     )
 
     fun startCaching() {

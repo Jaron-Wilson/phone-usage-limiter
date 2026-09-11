@@ -51,7 +51,8 @@ class AppGuardService : AccessibilityService() {
                 ownPackage = packageName,
                 mode = mode,
                 homePackages = policy.homePackages,
-                isLaunchable = ::isLaunchable
+                isLaunchable = ::isLaunchable,
+                alwaysAllowed = policy.alwaysAllowed
             )
         ) return
 

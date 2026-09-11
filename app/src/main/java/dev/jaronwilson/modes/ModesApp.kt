@@ -36,6 +36,13 @@ class ModesApp : Application() {
         )
         nm.createNotificationChannel(
             NotificationChannel(
+                CH_COMMUTE,
+                "Leaving on time",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "Tells you when to set off, and offers directions." }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(
                 CH_STATUS,
                 "Current mode",
                 NotificationManager.IMPORTANCE_LOW
@@ -49,6 +56,7 @@ class ModesApp : Application() {
     companion object {
         const val CH_DIGEST = "digest"
         const val CH_STATUS = "status"
+        const val CH_COMMUTE = "commute"
     }
 }
 

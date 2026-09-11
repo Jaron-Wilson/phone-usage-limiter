@@ -6,6 +6,7 @@ import dev.jaronwilson.modes.core.model.GuardMode
 import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.GuardScope
 import dev.jaronwilson.modes.core.model.HomeEntry
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.MatchField
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifClass
@@ -142,6 +143,7 @@ object Defaults {
 
     const val MODE_OPEN = "open"
     const val MODE_WORK = "work"
+    const val MODE_SCHOOL = "school"
     const val MODE_FOCUS = "focus"
     const val MODE_PERSONAL = "personal"
     const val MODE_SLEEP = "sleep"
@@ -156,6 +158,7 @@ object Defaults {
             allowedClasses = NotifClass.entries.toSet(),
             guardMode = GuardMode.OFF,
             guardScope = GuardScope.BLOCKLIST,
+            homeStyle = HomeStyle.ICONS,
             interruptionFilter = 0,
             digestEveryMinutes = 0,
             releaseOnModeExit = true
@@ -181,10 +184,28 @@ object Defaults {
             digestTimes = listOf(hm(12, 30), hm(17, 0))
         ),
         Mode(
+            id = MODE_SCHOOL,
+            name = "School",
+            glyph = "◒",
+            sortOrder = 2,
+            allowedClasses = setOf(NotifClass.CALL, NotifClass.DIRECT, NotifClass.FINANCE),
+            allowedPackages = setOf(Pkg.CALENDAR),
+            blockedPackages = Pkg.DISTRACTING,
+            guardMode = GuardMode.SPEEDBUMP,
+            guardScope = GuardScope.ALLOWLIST,
+            homeStyle = HomeStyle.TEXT,
+            speedbumpSeconds = 15,
+            passMinutes = 5,
+            interruptionFilter = NotificationManager.INTERRUPTION_FILTER_PRIORITY,
+            // Between classes is the natural gap, so nothing fixed: it hands
+            // back what it held the moment the timetable lets up.
+            releaseOnModeExit = true
+        ),
+        Mode(
             id = MODE_FOCUS,
             name = "Deep focus",
             glyph = "●",
-            sortOrder = 2,
+            sortOrder = 3,
             // Calls only. A phone that can still be reached in an emergency is
             // a phone you can actually leave face-down.
             allowedClasses = setOf(NotifClass.CALL),
@@ -207,13 +228,14 @@ object Defaults {
             id = MODE_PERSONAL,
             name = "Personal",
             glyph = "◔",
-            sortOrder = 3,
+            sortOrder = 4,
             allowedClasses = setOf(
                 NotifClass.CALL, NotifClass.DIRECT, NotifClass.MENTION,
                 NotifClass.STORY, NotifClass.FINANCE
             ),
             guardMode = GuardMode.SPEEDBUMP,
             guardScope = GuardScope.BLOCKLIST,
+            homeStyle = HomeStyle.ICONS,
             interruptionFilter = 0,
             digestEveryMinutes = 90
         ),
@@ -221,7 +243,7 @@ object Defaults {
             id = MODE_SLEEP,
             name = "Sleep",
             glyph = "◐",
-            sortOrder = 4,
+            sortOrder = 5,
             allowedClasses = setOf(NotifClass.CALL),
             blockedPackages = Pkg.DISTRACTING,
             guardMode = GuardMode.SPEEDBUMP,
@@ -249,49 +271,47 @@ object Defaults {
             modeId = MODE_SLEEP,
             priority = 10,
             note = "Nightly wind-down"
-        ),
-        TimeRule(
-            daysMask = 0b0011111, // Mon-Fri
-            startMinute = hm(9, 0),
-            endMinute = hm(17, 30),
-            modeId = MODE_WORK,
-            priority = 1,
-            note = "Default working hours, overridden by calendar rules"
-        ),
-        TimeRule(
-            daysMask = 0b1100000, // Sat-Sun
-            startMinute = hm(9, 0),
-            endMinute = hm(22, 0),
-            modeId = MODE_PERSONAL,
-            priority = 1,
-            note = "Weekends"
         )
+        // No working-hours rule. Whether you are at work is a question your
+        // calendar already answers, and guessing it from the clock puts you in
+        // Work on a Tuesday you took off.
     )
+
 
     fun calendarRules(): List<CalendarRule> = listOf(
         CalendarRule(
-            titlePattern = "(?i)(deep work|focus|heads.?down|writing|no meetings|study|blocked)",
+            titlePattern = "(?i)(deep work|heads.?down|writing|no meetings|focus block)",
             busyOnly = false,
             modeId = MODE_FOCUS,
             priority = 100,
-            note = "Any event you name for focus wins over everything else"
+            note = "Anything you name for focus wins over everything else"
         ),
         CalendarRule(
-            titlePattern = "(?i)(sleep|bed|rest)",
+            titlePattern = "(?i)\\b(sleep|bed)\\b",
             busyOnly = false,
             modeId = MODE_SLEEP,
             priority = 90,
             note = "Explicit sleep events"
         ),
         CalendarRule(
-            titlePattern = null,
-            busyOnly = true,
-            includeAllDay = false,
+            titlePattern = "(?i)\\b(school|class|lecture|lab|seminar|studio|tutorial|exam|midterm|final|quiz|homework|hw)\\b",
+            busyOnly = false,
+            modeId = MODE_SCHOOL,
+            priority = 80,
+            note = "Events that say school"
+        ),
+        CalendarRule(
+            titlePattern = "(?i)\\b(work|shift|on.?call|clock.?in)\\b",
+            busyOnly = false,
             modeId = MODE_WORK,
-            priority = 10,
-            note = "Any busy event switches to Work"
+            priority = 70,
+            note = "Events that say work"
         )
+        // Deliberately no catch-all. An unnamed meeting is not a reason to
+        // reshape the phone: anything that says neither school nor work leaves
+        // you in Open.
     )
+
 
     // Seeded folders get fixed ids so the starting home screens can point at
     // them. Room only auto-assigns when the id is zero.
@@ -401,6 +421,21 @@ object Defaults {
                     add(folder(FOLDER_EVERYDAY))
                     add(folder(FOLDER_MONEY))
                     add(folder(FOLDER_TOOLS))
+                    add(folder(FOLDER_SOCIAL, on = false))
+                    add(folder(FOLDER_MEDIA, on = false))
+                    add(folder(FOLDER_HOUSE, on = false))
+                }
+            )
+            addAll(
+                layout(MODE_SCHOOL) {
+                    add(app(Pkg.DIALER))
+                    add(app(Pkg.MESSAGES))
+                    add(app(Pkg.CALENDAR))
+                    add(folder(FOLDER_WORK))
+                    add(folder(FOLDER_TOOLS))
+                    add(folder(FOLDER_PEOPLE))
+                    add(folder(FOLDER_MONEY))
+                    add(folder(FOLDER_EVERYDAY, on = false))
                     add(folder(FOLDER_SOCIAL, on = false))
                     add(folder(FOLDER_MEDIA, on = false))
                     add(folder(FOLDER_HOUSE, on = false))

@@ -28,7 +28,9 @@ data class CalEvent(
      * milliseconds. The provider already did this arithmetic; use its answer.
      */
     val startDay: Int = 0,
-    val endDay: Int = 0
+    val endDay: Int = 0,
+    /** Free text, exactly as typed into the event. Often empty. */
+    val location: String = ""
 ) {
     /** Whether this instance appears on the given local day. */
     fun occursOn(julianDay: Int): Boolean =
@@ -135,7 +137,8 @@ class CalendarSource(private val context: Context) {
             CalendarContract.Instances.STATUS,
             CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
             CalendarContract.Instances.START_DAY,
-            CalendarContract.Instances.END_DAY
+            CalendarContract.Instances.END_DAY,
+            CalendarContract.Instances.EVENT_LOCATION
         )
         return runCatching {
             context.contentResolver.query(
@@ -158,7 +161,8 @@ class CalendarSource(private val context: Context) {
                                 allDay = c.getInt(5) == 1,
                                 busy = c.getInt(6) == CalendarContract.Events.AVAILABILITY_BUSY,
                                 startDay = c.getInt(10),
-                                endDay = c.getInt(11)
+                                endDay = c.getInt(11),
+                                location = c.getString(12).orEmpty()
                             )
                         )
                     }

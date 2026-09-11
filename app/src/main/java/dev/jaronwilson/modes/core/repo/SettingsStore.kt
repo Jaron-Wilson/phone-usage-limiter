@@ -33,6 +33,12 @@ class SettingsStore(private val context: Context) {
         val SETUP_DONE = booleanPreferencesKey("setup_done")
         val LAST_DIGEST = longPreferencesKey("last_digest")
         val AGENDA_HIGHLIGHT = stringPreferencesKey("agenda_highlight")
+        val ALWAYS_ALLOWED = stringPreferencesKey("always_allowed")
+        val HOME_ADDRESS = stringPreferencesKey("home_address")
+        val ARRIVE_EARLY = longPreferencesKey("arrive_early_minutes")
+        val GET_READY = longPreferencesKey("get_ready_minutes")
+        val DEFAULT_TRAVEL = longPreferencesKey("default_travel_minutes")
+        val COMMUTE_ENABLED = booleanPreferencesKey("commute_enabled")
     }
 
     data class ActiveState(
@@ -106,6 +112,37 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setAgendaHighlight(v: String) = edit { it[K.AGENDA_HIGHLIGHT] = v }
+
+    /**
+     * Apps no mode ever gets to stop, on top of the built-in essentials.
+     * For the handful of things that are neither distraction nor emergency but
+     * still need to run whenever they feel like it.
+     */
+    val alwaysAllowed: Flow<Set<String>> = context.dataStore.data.map { p ->
+        p[K.ALWAYS_ALLOWED].orEmpty().split("\n").filter { it.isNotBlank() }.toSet()
+    }
+
+    suspend fun setAlwaysAllowed(packages: Set<String>) =
+        edit { it[K.ALWAYS_ALLOWED] = packages.joinToString("\n") }
+
+    // ---- leaving on time ----
+    val commuteEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.COMMUTE_ENABLED] ?: false }
+    suspend fun setCommuteEnabled(v: Boolean) = edit { it[K.COMMUTE_ENABLED] = v }
+
+    val homeAddress: Flow<String> = context.dataStore.data.map { it[K.HOME_ADDRESS].orEmpty() }
+    suspend fun setHomeAddress(v: String) = edit { it[K.HOME_ADDRESS] = v }
+
+    /** Minutes you want to be there before it starts: parking, walking, settling. */
+    val arriveEarlyMinutes: Flow<Long> = context.dataStore.data.map { it[K.ARRIVE_EARLY] ?: 10L }
+    suspend fun setArriveEarlyMinutes(v: Long) = edit { it[K.ARRIVE_EARLY] = v }
+
+    /** Minutes of warning before you actually have to move. */
+    val getReadyMinutes: Flow<Long> = context.dataStore.data.map { it[K.GET_READY] ?: 5L }
+    suspend fun setGetReadyMinutes(v: Long) = edit { it[K.GET_READY] = v }
+
+    /** Fallback drive time when nothing better is known. */
+    val defaultTravelMinutes: Flow<Long> = context.dataStore.data.map { it[K.DEFAULT_TRAVEL] ?: 20L }
+    suspend fun setDefaultTravelMinutes(v: Long) = edit { it[K.DEFAULT_TRAVEL] = v }
 
     val setupDone: Flow<Boolean> = context.dataStore.data.map { it[K.SETUP_DONE] ?: false }
     suspend fun setSetupDone(v: Boolean) = edit { it[K.SETUP_DONE] = v }

@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import dev.jaronwilson.modes.core.model.EventKind
 import dev.jaronwilson.modes.core.model.GuardMode
 import dev.jaronwilson.modes.core.model.GuardScope
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.MatchField
 import dev.jaronwilson.modes.core.model.NotifClass
 
@@ -78,4 +79,11 @@ class Converters {
     @TypeConverter
     fun dbToKind(value: String): EventKind =
         runCatching { EventKind.valueOf(value) }.getOrDefault(EventKind.APP_OPENED)
+
+    @TypeConverter
+    fun styleToDb(value: HomeStyle): String = value.name
+
+    @TypeConverter
+    fun dbToStyle(value: String): HomeStyle =
+        runCatching { HomeStyle.valueOf(value) }.getOrDefault(HomeStyle.TEXT)
 }

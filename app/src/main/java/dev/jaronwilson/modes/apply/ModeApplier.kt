@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.ModesApp
 import dev.jaronwilson.modes.R
 import dev.jaronwilson.modes.core.model.ModeSource
@@ -69,7 +70,7 @@ class ModeApplier(
         runCatching { zen.activate(decision.modeId, modes) }
             .onFailure { Log.w(TAG, "zen activate failed", it) }
 
-        postStatus(next.name, next.glyph, decision)
+        postStatus(next.name, next.glyph, decision, nextEventLine())
     }
 
     /** Reapply the current mode without recomputing it. Used after a reboot. */
@@ -81,7 +82,33 @@ class ModeApplier(
         )
     }
 
-    private fun postStatus(name: String, glyph: String, decision: Decision) {
+    /**
+     * The next thing on the calendar, in one line, or null.
+     *
+     * This is the closest an app can get to owning the lock screen. Android
+     * does not let anything replace it, so the play is to be the one thing
+     * worth reading on it while the gate keeps everything else off.
+     */
+    private fun nextEventLine(): String? = runCatching {
+        val now = System.currentTimeMillis()
+        val event = AppGraph.scheduler.calendar
+            .events(now, now + 18 * 60 * 60 * 1000L)
+            .filter { it.end > now }
+            .minByOrNull { it.begin }
+            ?: return null
+        val time = DateTimeFormatter.ofPattern("HH:mm")
+            .format(Instant.ofEpochMilli(event.begin).atZone(ZoneId.systemDefault()))
+        if (event.allDay) event.title
+        else if (event.begin <= now) "Now: ${event.title}"
+        else "$time  ${event.title}"
+    }.getOrNull()
+
+    private fun postStatus(
+        name: String,
+        glyph: String,
+        decision: Decision,
+        nextEvent: String?
+    ) {
         val open = PendingIntent.getActivity(
             context,
             0,
@@ -105,9 +132,16 @@ class ModeApplier(
         val n = Notification.Builder(context, ModesApp.CH_STATUS)
             .setSmallIcon(R.drawable.ic_stat_modes)
             .setContentTitle(if (glyph.isBlank()) name else "$glyph  $name")
-            .setContentText(detail)
+            .setContentText(nextEvent ?: detail)
+            .setStyle(
+                Notification.BigTextStyle()
+                    .bigText(listOfNotNull(nextEvent, detail).joinToString("\n"))
+            )
             .setContentIntent(open)
-            .setOngoing(false)
+            // Sticky and public on purpose: it is the one line meant to survive
+            // on a lock screen the gate has otherwise emptied.
+            .setOngoing(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .build()

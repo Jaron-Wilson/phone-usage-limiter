@@ -36,11 +36,21 @@ The last two are genuinely optional. Skip them and everything else still works.
 
 | Mode | Gets through | Home screen | Guard | Delivery |
 |---|---|---|---|---|
-| Open | everything | everything, in folders | off | immediately |
-| Work | calls, DMs, mentions, money | Work, Everyday, Money | allowlist, pause | 12:30 and 17:00 |
-| Deep focus | calls and fraud alerts only | Tools, Money, greyscale | allowlist, sent home | when the mode ends |
-| Personal | calls, DMs, mentions, stories, money | Everyday, Money, Social | blocklist, pause | every 90 minutes |
-| Sleep | calls from starred contacts, fraud alerts | clock, phone, messages, Money | allowlist, pause | 07:30 |
+| Open | everything | **icons**, every folder | off | immediately |
+| Work | calls, DMs, mentions, money | text: Work, Everyday, Money | allowlist, pause | 12:30 and 17:00 |
+| School | calls, DMs, money | text: School, Tools, People | allowlist, pause | when the timetable lets up |
+| Deep focus | calls and fraud alerts only | text: Tools, Money, greyscale | allowlist, sent home | when the mode ends |
+| Personal | calls, DMs, mentions, stories, money | **icons**, Everyday, Social | blocklist, pause | every 90 minutes |
+| Sleep | calls from starred contacts, fraud alerts | text: clock, phone, messages | allowlist, pause | 07:30 |
+
+### Two home screens, on purpose
+
+Open and Personal draw **icons in a grid**, folders as tiles. Work, School and
+Sleep draw **names only**. Icons are quicker to hit and nicer to look at, which
+is exactly the argument for them in a mode where browsing is fine and exactly
+the argument against them in one where you are meant to be doing something
+else. The text list is duller by design. Both read the same folders; only the
+invitation differs. Set per mode under Modes > a mode > Home screen.
 
 Edit any of them in the app. Nothing here is hardcoded.
 
@@ -134,6 +144,10 @@ Each mode picks its own scope, under "If you reach for one anyway":
 - **Only apps I set aside** (blocklist) - loose. Anything new is allowed.
 - **Anything not on my home screen** (allowlist) - strict. Anything new is not.
 
+**Rules > Apps that are always allowed** adds your own standing exceptions,
+above every mode, for the things that are neither distraction nor emergency and
+still need to run whenever they like.
+
 These are never stopped under any setting, so you cannot lock yourself out:
 Phone, Messages, Contacts, Clock, Settings, the authenticator, the system UI,
 the permission controller, the installer, the keyboard, and every money app.
@@ -199,10 +213,24 @@ Highest priority wins:
 3. **A time of day rule**, e.g. 22:30 to 07:00 is Sleep
 4. **The default mode**
 
-Out of the box: any event whose title matches `deep work|focus|heads down|
-writing|no meetings|study|blocked` switches you into Deep focus. Any other busy,
-non-all-day event switches you into Work. Declined and cancelled events are
-ignored, because an invitation you said no to should not reshape your phone.
+Out of the box your calendar decides everything except bedtime:
+
+| An event saying | puts you in |
+|---|---|
+| deep work, heads down, writing, no meetings | Deep focus |
+| sleep, bed | Sleep |
+| school, class, lecture, lab, exam, quiz, homework | School |
+| work, shift, on call, clock in | Work |
+| anything else, or nothing at all | Open |
+
+**There is no catch-all.** An unnamed meeting is not a reason to reshape your
+phone, and there is no working-hours clock rule either: whether you are at work
+is a question the calendar already answers, and guessing it from the time of
+day puts you in Work on a Tuesday you took off. The only clock rule left is the
+nightly wind-down at 22:30.
+
+Declined and cancelled events are ignored, because an invitation you said no to
+should not reshape your phone.
 
 Transitions are driven by three overlapping mechanisms, because none is reliable
 alone: an exact alarm at the next boundary, a 15 minute periodic worker as a
@@ -310,6 +338,47 @@ dialog puts it back.
 
 Until that and the other required switches are on, the Now screen says so and
 nothing is considered active.
+
+## The lock screen
+
+**No app can replace Android's lock screen.** That is a platform restriction
+with no way around it, and anything claiming otherwise is a launcher pretending.
+
+What is possible is owning what appears there. The current mode is posted as a
+sticky, public notification carrying the next thing on your calendar, so on a
+lock screen the gate has otherwise emptied it is the one line left worth
+reading. Deep focus and Sleep also dim the wallpaper and drop the always-on
+display through `ZenDeviceEffects`, which is as close to a different lock
+screen as Android permits.
+
+## Leaving on time
+
+Off by default; turn it on under Rules. For any calendar event with a location
+it works backwards:
+
+```
+event starts            09:00
+- be there early (10m)  08:50   parked, walked in, sat down
+- the drive      (25m)  08:25
+= leave at              08:25
+- get ready       (5m)  08:20   the nudge
+```
+
+The nudge carries a **Navigate** button that opens directions. It offers; it
+never starts navigation by itself. Deciding to take over the screen of someone
+who may already be driving is not a convenience worth having, and that is a
+deliberate limit rather than an unfinished one.
+
+The drive time is a flat number you set, not live traffic. Live traffic needs a
+routing API key and a billing account, so it is left out rather than
+half-implemented. `Commute.nextPlan` takes a `travelMinutesFor` function
+specifically so a real provider can be dropped in without touching anything
+else.
+
+**Driving detection is not built.** It is possible through Play Services
+Activity Recognition, at the cost of a Play Services dependency, the
+`ACTIVITY_RECOGNITION` permission and steady battery use. Worth doing on
+purpose, not by accident.
 
 ## Stats
 
@@ -541,7 +610,7 @@ than touching the database. If you add anything the gate needs, add it there.
   thumb can still get through by turning the service off in Settings. That is
   deliberate: a tool you cannot escape is one you will uninstall.
 - **Database migrations are destructive** (`fallbackToDestructiveMigration`),
-  and the schema is at version 5. Upgrading from an earlier build resets your
+  and the schema is at version 6. Upgrading from an earlier build resets your
   modes and folders to the defaults, which is how retuned folders arrive.
 - **`QUERY_ALL_PACKAGES` is declared.** A launcher has to be able to list what
   is installed, and the `<queries>` element alone misses archived apps. This is
@@ -585,5 +654,7 @@ hardest to debug on a phone:
 ```
 
 - **`StatsTest`** - reconstructing time-per-mode from the change log.
+- **`AgendaDayTest`** - which day an event belongs to, all-day events included.
+- **`CommuteTest`** - working backwards to the moment you have to leave.
 
-58 tests, all passing.
+73 tests, all passing.

@@ -59,6 +59,21 @@ enum class GuardScope {
     ALLOWLIST
 }
 
+/**
+ * How the home screen draws itself.
+ *
+ * The difference is deliberate. Icons are faster to hit and pleasant to look
+ * at, which is exactly why they belong in the mode where browsing is allowed
+ * and not in the ones where you are meant to be doing something else. Text is
+ * duller on purpose.
+ */
+enum class HomeStyle {
+    /** Names only. Quiet, slower to scan, harder to drift into. */
+    TEXT,
+    /** Icons in a grid, folders as tiles. For when the phone is yours. */
+    ICONS
+}
+
 /** How hard the mode pushes back when you open an app it does not allow. */
 enum class GuardMode {
     /** Do nothing. */
@@ -99,6 +114,7 @@ data class Mode(
     // their own rows. See [HomeEntry].
     val guardMode: GuardMode = GuardMode.OFF,
     val guardScope: GuardScope = GuardScope.BLOCKLIST,
+    val homeStyle: HomeStyle = HomeStyle.TEXT,
     /** Seconds the speed bump makes you wait before the "open anyway" button works. */
     val speedbumpSeconds: Int = 10,
     /** How long an "open anyway" pass lasts, in minutes. */

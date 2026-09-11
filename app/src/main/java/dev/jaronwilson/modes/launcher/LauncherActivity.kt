@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.EventKind
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.core.model.resolveHomeRows
@@ -181,6 +182,13 @@ private fun Home() {
     }
 
     val allApps = remember { AppList.all(context) }
+    val iconStyle = mode?.homeStyle == HomeStyle.ICONS
+    // Icons are only loaded for the modes that draw them: decoding a hundred
+    // launcher icons is not work a Sleep-mode home screen should ever do.
+    val icons = remember(iconStyle) {
+        if (!iconStyle) emptyMap()
+        else AppList.all(context, withIcons = true).associate { it.packageName to it.icon }
+    }
 
     Box(
         Modifier
@@ -242,7 +250,32 @@ private fun Home() {
 
             Spacer(Modifier.height(28.dp))
 
-            if (!showAll) {
+            if (!showAll && iconStyle) {
+                Column(Modifier.weight(1f)) {
+                    IconHome(
+                        rows = rows,
+                        icons = icons,
+                        openFolder = openFolder,
+                        onToggleFolder = { id -> openFolder = if (openFolder == id) null else id },
+                        onEditHome = { openApp(context, editHomeFor = mode?.id) },
+                        onLaunch = { pkg ->
+                            Stats.log(EventKind.APP_OPENED, pkg)
+                            AppList.launch(context, pkg)
+                        },
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Text(
+                        "everything else",
+                        fontSize = 13.sp,
+                        letterSpacing = 1.sp,
+                        color = InkFaint,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showAll = true }
+                            .padding(vertical = 14.dp)
+                    )
+                }
+            } else if (!showAll) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     items(rows, key = { it.entry.id }) { row ->
                         HomeRowView(

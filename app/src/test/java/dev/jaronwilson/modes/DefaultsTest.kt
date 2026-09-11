@@ -98,7 +98,10 @@ class DefaultsTest {
             (Pkg.ESSENTIAL + Pkg.FINANCE).filter(installed).forEach { pkg ->
                 assertFalse(
                     "${mode.name} would stop you opening $pkg",
-                    GuardPolicy.shouldGuard(pkg, "dev.jaronwilson.modes", mode, reach) { true }
+                    GuardPolicy.shouldGuard(
+                        pkg, "dev.jaronwilson.modes", mode, reach,
+                        isLaunchable = { true }
+                    )
                 )
             }
         }

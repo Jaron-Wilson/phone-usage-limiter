@@ -30,7 +30,11 @@ import dev.jaronwilson.modes.core.model.NotifClass
 import dev.jaronwilson.modes.core.repo.SettingsStore
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
+import dev.jaronwilson.modes.commute.CommuteScheduler
+import dev.jaronwilson.modes.launcher.AppList
+import dev.jaronwilson.modes.ui.AppIcon
 import dev.jaronwilson.modes.ui.Panel
+import dev.jaronwilson.modes.ui.SwitchRow
 import dev.jaronwilson.modes.ui.RowItem
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
@@ -41,6 +45,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RulesScreen() {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val modes by AppGraph.repo.modes.collectAsState(initial = emptyList())
     val calendarRules by AppGraph.repo.ruleDao.observeCalendarRules().collectAsState(initial = emptyList())
     val timeRules by AppGraph.repo.ruleDao.observeTimeRules().collectAsState(initial = emptyList())
@@ -105,6 +110,106 @@ fun RulesScreen() {
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Add") }
+            }
+
+            SectionHeader("Apps that are always allowed")
+            Panel {
+                Text(
+                    "No mode ever stops these, on top of the built-in essentials. " +
+                        "For the things that are neither distraction nor emergency and " +
+                        "still need to run whenever they like.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                val allowed by AppGraph.repo.settings.alwaysAllowed
+                    .collectAsState(initial = emptySet())
+                var appQuery by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = appQuery,
+                    onValueChange = { appQuery = it },
+                    label = { Text("Find an app") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                val apps = remember { AppList.all(context, withIcons = true) }
+                val shown = remember(appQuery, apps, allowed) {
+                    val on = apps.filter { it.packageName in allowed }
+                    val rest = apps.filter { it.packageName !in allowed }
+                        .filter { appQuery.isBlank() || it.label.contains(appQuery, ignoreCase = true) }
+                        .take(30)
+                    on + rest
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    shown.forEach { app ->
+                        val on = app.packageName in allowed
+                        FilterChip(
+                            selected = on,
+                            onClick = {
+                                scope.launch {
+                                    AppGraph.repo.settings.setAlwaysAllowed(
+                                        if (on) allowed - app.packageName
+                                        else allowed + app.packageName
+                                    )
+                                }
+                            },
+                            label = { Text(app.label) },
+                            leadingIcon = { AppIcon(app.icon) }
+                        )
+                    }
+                }
+            }
+
+            SectionHeader("Leaving on time")
+            Panel {
+                val enabled by AppGraph.repo.settings.commuteEnabled.collectAsState(initial = false)
+                Text(
+                    "For calendar events that have a location, works backwards from " +
+                        "the start time and tells you when to set off, with a button " +
+                        "that opens directions. It offers; it never starts navigation " +
+                        "on its own.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SwitchRow(
+                    title = "Tell me when to leave",
+                    checked = enabled,
+                    onChange = { v ->
+                        scope.launch {
+                            AppGraph.repo.settings.setCommuteEnabled(v)
+                            CommuteScheduler(context).scheduleNext()
+                        }
+                    }
+                )
+                if (enabled) {
+                    val arrive by AppGraph.repo.settings.arriveEarlyMinutes.collectAsState(initial = 10L)
+                    val ready by AppGraph.repo.settings.getReadyMinutes.collectAsState(initial = 5L)
+                    val travel by AppGraph.repo.settings.defaultTravelMinutes.collectAsState(initial = 20L)
+                    MinutesField("Be there this many minutes early", arrive) { v ->
+                        scope.launch {
+                            AppGraph.repo.settings.setArriveEarlyMinutes(v)
+                            CommuteScheduler(context).scheduleNext()
+                        }
+                    }
+                    MinutesField("Warn me this long before setting off", ready) { v ->
+                        scope.launch {
+                            AppGraph.repo.settings.setGetReadyMinutes(v)
+                            CommuteScheduler(context).scheduleNext()
+                        }
+                    }
+                    MinutesField("Assume the drive takes this long", travel) { v ->
+                        scope.launch {
+                            AppGraph.repo.settings.setDefaultTravelMinutes(v)
+                            CommuteScheduler(context).scheduleNext()
+                        }
+                    }
+                    Text(
+                        "The drive time is a flat guess, not live traffic. Reading real " +
+                            "traffic needs a routing API key, which is a deliberate " +
+                            "omission rather than an oversight.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             SectionHeader("Calendars on this phone")
@@ -338,3 +443,18 @@ private data class CalRow(
     val synced: Boolean,
     val events: Int
 )
+
+@Composable
+private fun MinutesField(label: String, value: Long, onChange: (Long) -> Unit) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { next ->
+            text = next.filter { it.isDigit() }.take(3)
+            text.toLongOrNull()?.let(onChange)
+        },
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+}

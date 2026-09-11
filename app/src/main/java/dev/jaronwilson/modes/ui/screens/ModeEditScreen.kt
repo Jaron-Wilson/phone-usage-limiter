@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.GuardMode
 import dev.jaronwilson.modes.core.model.GuardScope
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifClass
 import dev.jaronwilson.modes.launcher.AppList
@@ -157,6 +160,39 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
                 Button(onClick = onEditHome, modifier = Modifier.fillMaxWidth()) {
                     Text("Arrange home screen and folders")
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "How it draws:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HomeStyle.entries.forEach { style ->
+                        FilterChip(
+                            selected = current.homeStyle == style,
+                            onClick = { update { it.copy(homeStyle = style) } },
+                            label = {
+                                Text(
+                                    when (style) {
+                                        HomeStyle.TEXT -> "Names only"
+                                        HomeStyle.ICONS -> "Icons and folders"
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+                Text(
+                    if (current.homeStyle == HomeStyle.ICONS) {
+                        "Quick to hit and nice to look at, which is the point in a mode " +
+                            "where browsing is fine."
+                    } else {
+                        "Duller on purpose. Harder to drift into when you are meant to be " +
+                            "doing something else."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
             SectionHeader("If you reach for one anyway")

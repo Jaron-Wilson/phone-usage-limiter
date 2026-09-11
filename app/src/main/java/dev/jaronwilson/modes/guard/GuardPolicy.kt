@@ -48,10 +48,13 @@ object GuardPolicy {
         ownPackage: String,
         mode: Mode,
         homePackages: Set<String>,
-        isLaunchable: (String) -> Boolean
+        isLaunchable: (String) -> Boolean,
+        alwaysAllowed: Set<String> = emptySet()
     ): Boolean {
         if (mode.guardMode == GuardMode.OFF) return false
         if (pkg == ownPackage) return false
+        // Your own standing exceptions, above any mode.
+        if (pkg in alwaysAllowed) return false
         if (pkg in NEVER_GUARD) return false
         if (pkg in Pkg.ESSENTIAL) return false
         // Money is never guarded. A fraud alert you cannot act on is worse than

@@ -122,6 +122,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".commute.LeaveReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".notify.DigestActionReceiver"
             android:exported="false" />
 
