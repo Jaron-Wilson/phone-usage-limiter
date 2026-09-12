@@ -37,6 +37,15 @@ class Converters {
     fun dbToIntList(value: String): List<Int> =
         if (value.isEmpty()) emptyList() else value.split(",").mapNotNull { it.trim().toIntOrNull() }
 
+    // Comma-separated, matching the TEXT DEFAULT '' the migration adds.
+    @TypeConverter
+    fun longListToDb(value: List<Long>): String = value.joinToString(",")
+
+    @TypeConverter
+    fun dbToLongList(value: String): List<Long> =
+        if (value.isBlank()) emptyList()
+        else value.split(",").mapNotNull { it.trim().toLongOrNull() }
+
     @TypeConverter
     fun classSetToDb(value: Set<NotifClass>): String = value.joinToString(",") { it.name }
 

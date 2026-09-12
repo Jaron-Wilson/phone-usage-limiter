@@ -61,6 +61,8 @@ import dev.jaronwilson.modes.commute.CommuteScheduler
 import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.repo.Stats
+import dev.jaronwilson.modes.core.model.Folder
+import dev.jaronwilson.modes.core.model.canNest
 import dev.jaronwilson.modes.core.model.resolveHomeRows
 import kotlinx.coroutines.launch
 import dev.jaronwilson.modes.notify.DigestPublisher
@@ -116,6 +118,9 @@ private fun Home() {
     var showAll by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var openFolder by remember { mutableStateOf<Long?>(null) }
+    // A trail rather than a single id: opening a folder inside a folder has to
+    // be reversible one step at a time.
+    var folderTrail by remember { mutableStateOf<List<Long>>(emptyList()) }
     var editing by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf<Picking?>(null) }
 
@@ -132,6 +137,7 @@ private fun Home() {
     // Rows switched off for this mode are not drawn at all. Under an allowlist
     // guard they are also not openable, so the screen stays an honest picture
     // of what the mode permits.
+    val foldersById = remember(folders) { folders.associateBy { it.id } }
     val rowsAll = remember(entries, folders) { resolveHomeRows(entries, folders) }
     val rows = remember(rowsAll) {
         rowsAll.filter { it.entry.enabled && it.packages.isNotEmpty() }
@@ -192,10 +198,14 @@ private fun Home() {
         }
     }
 
-    BackHandler(enabled = showAll || openFolder != null || editing || picking != null) {
+    BackHandler(
+        enabled = showAll || openFolder != null || editing || picking != null ||
+            folderTrail.isNotEmpty()
+    ) {
         when {
             picking != null -> picking = null
             editing -> editing = false
+            folderTrail.isNotEmpty() -> folderTrail = folderTrail.dropLast(1)
             else -> {
                 showAll = false
                 openFolder = null
@@ -210,6 +220,37 @@ private fun Home() {
             AppGraph.repo.homeDao.upsertAll(
                 newRows.mapIndexed { i, r -> r.entry.copy(sortOrder = i) }
             )
+        }
+    }
+
+    /**
+     * Dropping one row onto a folder.
+     *
+     * An app joins the folder and its own row goes, which is the whole point:
+     * the home screen gets shorter. A folder dropped on a folder nests, unless
+     * that would make a loop, in which case nothing happens rather than
+     * something surprising.
+     */
+    fun dropInto(dragged: HomeRow, target: HomeRow) {
+        val folder = target.folder ?: return
+        AppGraph.scope.launch {
+            val byId = AppGraph.repo.folderDao.getAll().associateBy { it.id }
+            val child = dragged.folder
+            if (child != null) {
+                if (!canNest(folder, child, byId)) return@launch
+                if (child.id in folder.subFolders) return@launch
+                AppGraph.repo.folderDao.upsert(
+                    folder.copy(subFolders = folder.subFolders + child.id)
+                )
+            } else {
+                val pkg = dragged.entry.packageName ?: return@launch
+                if (pkg !in folder.packages) {
+                    AppGraph.repo.folderDao.upsert(
+                        folder.copy(packages = folder.packages + pkg)
+                    )
+                }
+            }
+            AppGraph.repo.homeDao.delete(dragged.entry)
         }
     }
 
@@ -315,7 +356,8 @@ private fun Home() {
                         },
                         onMove = { from, to -> persistOrder(ordered.moved(from, to)) },
                         onRemove = { removeRow(it) },
-                        onOpen = { }
+                        onOpen = { row -> if (row.isFolder) picking = Picking.InFolder(row.folder!!.id) },
+                        onDropInto = { dragged, target -> dropInto(dragged, target) }
                     )
                 } else {
                     EditableRowList(
@@ -326,11 +368,12 @@ private fun Home() {
                         },
                         onMove = { from, to -> persistOrder(ordered.moved(from, to)) },
                         onRemove = { removeRow(it) },
-                        onOpen = { row -> if (row.isFolder) picking = Picking.InFolder(row.folder!!.id) }
+                        onOpen = { row -> if (row.isFolder) picking = Picking.InFolder(row.folder!!.id) },
+                        onDropInto = { dragged, target -> dropInto(dragged, target) }
                     )
                 }
                 Text(
-                    "Hold a row to drag it. Tap a folder to change what is in it.",
+                    "Hold to drag. Rest on a folder to drop it in. Tap a folder to see inside.",
                     fontSize = 12.sp,
                     color = InkFaint,
                     modifier = Modifier.padding(top = 18.dp)
@@ -373,9 +416,16 @@ private fun Home() {
                         HomeRowView(
                             row = row,
                             expanded = openFolder == row.entry.id,
+                            foldersById = foldersById,
+                            trail = if (openFolder == row.entry.id) folderTrail else emptyList(),
                             onToggle = {
-                                openFolder = if (openFolder == row.entry.id) null else row.entry.id
+                                if (openFolder == row.entry.id) {
+                                    openFolder = null; folderTrail = emptyList()
+                                } else {
+                                    openFolder = row.entry.id; folderTrail = emptyList()
+                                }
                             },
+                            onOpenSub = { id -> folderTrail = folderTrail + id },
                             onLongPress = { editing = true }
                         )
                     }
@@ -657,7 +707,10 @@ private fun openSyncSettings(context: Context) {
 private fun HomeRowView(
     row: HomeRow,
     expanded: Boolean,
+    foldersById: Map<Long, Folder>,
+    trail: List<Long>,
     onToggle: () -> Unit,
+    onOpenSub: (Long) -> Unit,
     onLongPress: () -> Unit
 ) {
     val context = LocalContext.current
@@ -672,10 +725,17 @@ private fun HomeRowView(
         return
     }
 
-    val contents = remember(row.packages) {
-        row.packages.filter { AppList.isInstalled(context, it) }
+    // Whichever folder the trail has arrived at, or this one.
+    val shown = remember(row.folder, trail, foldersById) {
+        trail.lastOrNull()?.let { foldersById[it] } ?: row.folder
     }
-    if (contents.isEmpty()) return
+    val contents = remember(shown) {
+        shown?.packages.orEmpty().filter { AppList.isInstalled(context, it) }
+    }
+    val subFolders = remember(shown, foldersById) {
+        shown?.subFolders.orEmpty().mapNotNull { foldersById[it] }
+    }
+    if (contents.isEmpty() && subFolders.isEmpty()) return
 
     Column {
         Row(
@@ -699,6 +759,32 @@ private fun HomeRowView(
         }
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 18.dp, bottom = 8.dp)) {
+                if (trail.isNotEmpty()) {
+                    Text(
+                        (listOf(row.name) + trail.mapNotNull { foldersById[it]?.name })
+                            .joinToString("  >  "),
+                        fontSize = 12.sp,
+                        color = InkFaint,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+                subFolders.forEach { sub ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenSub(sub.id) }
+                            .padding(vertical = 9.dp)
+                    ) {
+                        Text(sub.name, fontSize = 19.sp, color = Ink)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${sub.packages.size + sub.subFolders.size}",
+                            fontSize = 12.sp,
+                            color = InkFaint
+                        )
+                    }
+                }
                 contents.forEach { pkg ->
                     Text(
                         AppList.label(context, pkg),

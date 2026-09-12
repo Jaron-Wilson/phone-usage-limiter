@@ -206,10 +206,63 @@ data class NotifRule(
 data class Folder(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    /** Contents, in the order they appear when the folder is opened. */
+    /** Apps inside, in the order they appear when the folder is opened. */
     val packages: List<String> = emptyList(),
+    /**
+     * Folders inside this one, drawn before the apps.
+     *
+     * Nesting earns its keep for grouping a term's worth of course folders
+     * under "School"; it stops earning it about one level after that, which is
+     * why [flattenPackages] guards against depth and against a folder
+     * containing itself rather than trusting the data.
+     */
+    val subFolders: List<Long> = emptyList(),
     val sortOrder: Int = 0
-)
+) {
+    val isEmpty: Boolean get() = packages.isEmpty() && subFolders.isEmpty()
+}
+
+/**
+ * Every app reachable from a folder, following nesting.
+ *
+ * Cycles are possible the moment folders can contain folders, whether through
+ * a bug or a half-finished edit, and a cycle here would hang the launcher
+ * rather than merely look wrong. So this tracks what it has seen and stops.
+ */
+fun flattenPackages(
+    folder: Folder,
+    byId: Map<Long, Folder>,
+    seen: MutableSet<Long> = mutableSetOf(),
+    depth: Int = 0
+): List<String> {
+    if (depth > MAX_FOLDER_DEPTH || !seen.add(folder.id)) return emptyList()
+    val nested = folder.subFolders
+        .mapNotNull { byId[it] }
+        .flatMap { flattenPackages(it, byId, seen, depth + 1) }
+    return folder.packages + nested
+}
+
+/** Deep enough for a course list inside a term inside School. */
+const val MAX_FOLDER_DEPTH = 4
+
+/**
+ * Whether [child] can go inside [parent] without creating a loop.
+ *
+ * A folder cannot hold itself, nor anything that already holds it.
+ */
+fun canNest(parent: Folder, child: Folder, byId: Map<Long, Folder>): Boolean {
+    if (parent.id == child.id) return false
+    // Walking down from the child, we must never arrive back at the parent.
+    val stack = ArrayDeque(child.subFolders)
+    val seen = mutableSetOf(child.id)
+    while (stack.isNotEmpty()) {
+        val next = stack.removeFirst()
+        if (next == parent.id) return false
+        if (!seen.add(next)) continue
+        byId[next]?.subFolders?.forEach { stack.addLast(it) }
+    }
+    return true
+}
 
 /**
  * Drops packages that are not on the phone.
@@ -261,6 +314,13 @@ data class HomeRow(
             folder != null -> folder.packages
             else -> listOfNotNull(entry.packageName)
         }
+
+    /** Apps inside, following nesting. What the guard must allow. */
+    fun reachableDeep(byId: Map<Long, Folder>): List<String> = when {
+        !entry.enabled -> emptyList()
+        folder != null -> flattenPackages(folder, byId)
+        else -> listOfNotNull(entry.packageName)
+    }
 
     /** Every package this row lets you reach. */
     val reachable: List<String> get() = packages

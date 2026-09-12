@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.TypeConverters
 import dev.jaronwilson.modes.core.model.AppPass
 import dev.jaronwilson.modes.core.model.CalendarRule
@@ -29,7 +31,7 @@ import dev.jaronwilson.modes.core.model.Vip
         UsageEvent::class,
         AppPass::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -43,6 +45,18 @@ abstract class ModesDatabase : RoomDatabase() {
     abstract fun passDao(): PassDao
 
     companion object {
+        /**
+         * Folders gained a list of child folders. Nothing existing changes, so
+         * this adds the column and leaves every row alone. Destructive
+         * migration is fine while a schema is being invented and stops being
+         * fine once somebody has arranged their phone.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE folders ADD COLUMN subFolders TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: ModesDatabase? = null
 
@@ -52,6 +66,7 @@ abstract class ModesDatabase : RoomDatabase() {
                 ModesDatabase::class.java,
                 "modes.db"
             )
+                .addMigrations(MIGRATION_6_7)
                 .fallbackToDestructiveMigration()
                 .build()
                 .also { instance = it }

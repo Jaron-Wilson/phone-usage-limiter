@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +64,15 @@ private val Accent = Color(0xFFB8A88A)
  * at is the gap you get.
  */
 private val RowHeight = 52.dp
+
+/**
+ * How long the finger must rest over a folder before the drag stops meaning
+ * "move past this" and starts meaning "put it in here".
+ *
+ * Without a pause the two gestures are the same gesture, and you could never
+ * drag an app past a folder without it being swallowed.
+ */
+private const val AbsorbDwellMs = 450L
 
 @Composable
 fun EditBar(
@@ -114,17 +124,31 @@ fun EditableRowList(
     label: (HomeRow) -> String,
     onMove: (from: Int, to: Int) -> Unit,
     onRemove: (HomeRow) -> Unit,
-    onOpen: (HomeRow) -> Unit
+    onOpen: (HomeRow) -> Unit,
+    onDropInto: (dragged: HomeRow, folder: HomeRow) -> Unit
 ) {
     val density = LocalDensity.current
     val rowPx = with(density) { RowHeight.toPx() }
 
     var dragging by remember { mutableIntStateOf(-1) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var hoverIndex by remember { mutableIntStateOf(-1) }
+    var hoverSince by remember { mutableLongStateOf(0L) }
+    var absorbInto by remember { mutableIntStateOf(-1) }
+
+    fun endDrag() {
+        if (absorbInto >= 0 && dragging >= 0 &&
+            dragging in rows.indices && absorbInto in rows.indices
+        ) {
+            onDropInto(rows[dragging], rows[absorbInto])
+        }
+        dragging = -1; offsetY = 0f; hoverIndex = -1; absorbInto = -1
+    }
 
     Column {
         rows.forEachIndexed { index, row ->
             val isDragged = dragging == index
+            val isAbsorbTarget = absorbInto == index
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -133,39 +157,57 @@ fun EditableRowList(
                     .zIndex(if (isDragged) 1f else 0f)
                     .graphicsLayer { if (isDragged) translationY = offsetY }
                     .alpha(if (isDragged) 0.9f else 1f)
+                    .then(
+                        if (isAbsorbTarget) Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x33B8A88A))
+                        else Modifier
+                    )
                     .pointerInput(rows.size, index) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
-                                dragging = index
-                                offsetY = 0f
+                                dragging = index; offsetY = 0f
+                                hoverIndex = -1; absorbInto = -1
                             },
                             onDrag = { change, delta ->
                                 change.consume()
                                 offsetY += delta.y
-                                // Swap as soon as the finger has travelled a
-                                // whole row, so the list under it stays honest.
+                                val from = dragging
                                 val steps = (offsetY / rowPx).roundToInt()
-                                if (steps != 0) {
-                                    val from = dragging
-                                    val to = (from + steps).coerceIn(0, rows.lastIndex)
-                                    if (to != from) {
-                                        onMove(from, to)
-                                        dragging = to
-                                        offsetY -= (to - from) * rowPx
+                                val to = (from + steps).coerceIn(0, rows.lastIndex)
+                                val draggedIsApp = rows.getOrNull(from)?.isFolder == false
+                                val targetIsFolder = rows.getOrNull(to)?.isFolder == true
+
+                                if (to != from && targetIsFolder && draggedIsApp) {
+                                    // Hovering a folder: wait, then absorb.
+                                    val now = System.currentTimeMillis()
+                                    if (hoverIndex != to) {
+                                        hoverIndex = to; hoverSince = now; absorbInto = -1
+                                    } else if (now - hoverSince > AbsorbDwellMs) {
+                                        absorbInto = to
                                     }
+                                } else if (to != from) {
+                                    onMove(from, to)
+                                    dragging = to
+                                    offsetY -= (to - from) * rowPx
+                                    hoverIndex = -1; absorbInto = -1
                                 }
                             },
-                            onDragEnd = { dragging = -1; offsetY = 0f },
-                            onDragCancel = { dragging = -1; offsetY = 0f }
+                            onDragEnd = { endDrag() },
+                            onDragCancel = { endDrag() }
                         )
                     }
             ) {
                 Text("::", fontSize = 15.sp, color = if (isDragged) Accent else InkFaint)
                 Spacer(Modifier.width(14.dp))
                 Text(
-                    label(row),
+                    label(row) + if (isAbsorbTarget) "   drop in" else "",
                     fontSize = 21.sp,
-                    color = if (isDragged) InkBright else Ink,
+                    color = when {
+                        isAbsorbTarget -> Accent
+                        isDragged -> InkBright
+                        else -> Ink
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
@@ -191,7 +233,8 @@ fun EditableIconGrid(
     label: (HomeRow) -> String,
     onMove: (from: Int, to: Int) -> Unit,
     onRemove: (HomeRow) -> Unit,
-    onOpen: (HomeRow) -> Unit
+    onOpen: (HomeRow) -> Unit,
+    onDropInto: (dragged: HomeRow, folder: HomeRow) -> Unit
 ) {
     val density = LocalDensity.current
     var cellWidthPx by remember { mutableFloatStateOf(0f) }
@@ -201,6 +244,18 @@ fun EditableIconGrid(
     var dragging by remember { mutableIntStateOf(-1) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var hoverIndex by remember { mutableIntStateOf(-1) }
+    var hoverSince by remember { mutableLongStateOf(0L) }
+    var absorbInto by remember { mutableIntStateOf(-1) }
+
+    fun endGridDrag() {
+        if (absorbInto >= 0 && dragging >= 0 &&
+            dragging in rows.indices && absorbInto in rows.indices
+        ) {
+            onDropInto(rows[dragging], rows[absorbInto])
+        }
+        dragging = -1; offsetX = 0f; offsetY = 0f; hoverIndex = -1; absorbInto = -1
+    }
 
     Column(
         Modifier.fillMaxWidth(),
@@ -227,6 +282,7 @@ fun EditableIconGrid(
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
                                         dragging = index; offsetX = 0f; offsetY = 0f
+                                        hoverIndex = -1; absorbInto = -1
                                     },
                                     onDrag = { change, delta ->
                                         change.consume()
@@ -235,20 +291,28 @@ fun EditableIconGrid(
                                         val w = if (cellWidthPx > 0f) cellWidthPx else 1f
                                         val step = (offsetX / w).roundToInt() +
                                             (offsetY / cellHeightPx).roundToInt() * columns
-                                        if (step != 0) {
-                                            val from = dragging
-                                            val to = (from + step).coerceIn(0, rows.lastIndex)
-                                            if (to != from) {
-                                                onMove(from, to)
-                                                dragging = to
-                                                val moved = to - from
-                                                offsetX -= (moved % columns) * w
-                                                offsetY -= (moved / columns) * cellHeightPx
+                                        val from = dragging
+                                        val to = (from + step).coerceIn(0, rows.lastIndex)
+                                        val draggedIsApp = rows.getOrNull(from)?.isFolder == false
+                                        val targetIsFolder = rows.getOrNull(to)?.isFolder == true
+                                        if (to != from && targetIsFolder && draggedIsApp) {
+                                            val now = System.currentTimeMillis()
+                                            if (hoverIndex != to) {
+                                                hoverIndex = to; hoverSince = now; absorbInto = -1
+                                            } else if (now - hoverSince > AbsorbDwellMs) {
+                                                absorbInto = to
                                             }
+                                        } else if (to != from) {
+                                            onMove(from, to)
+                                            dragging = to
+                                            val moved = to - from
+                                            offsetX -= (moved % columns) * w
+                                            offsetY -= (moved / columns) * cellHeightPx
+                                            hoverIndex = -1; absorbInto = -1
                                         }
                                     },
-                                    onDragEnd = { dragging = -1; offsetX = 0f; offsetY = 0f },
-                                    onDragCancel = { dragging = -1; offsetX = 0f; offsetY = 0f }
+                                    onDragEnd = { endGridDrag() },
+                                    onDragCancel = { endGridDrag() }
                                 )
                             }
                     ) {
@@ -261,18 +325,26 @@ fun EditableIconGrid(
                                     Modifier
                                         .size(46.dp)
                                         .clip(RoundedCornerShape(13.dp))
-                                        .background(Color(0x1FFFFFFF))
+                                        .background(
+                                            if (absorbInto == index) Color(0x66B8A88A)
+                                            else Color(0x1FFFFFFF)
+                                        )
                                         .clickable { onOpen(row) },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     val first = row.packages.firstOrNull()
-                                    if (row.isFolder || first == null) {
-                                        Text(
-                                            "${row.packages.size}",
-                                            fontSize = 15.sp,
-                                            color = InkDim
-                                        )
-                                    } else {
+                                    if (row.isFolder) {
+                                        // A glance at the contents, as outside
+                                        // edit mode: a count alone tells you
+                                        // nothing about which folder this is.
+                                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            row.packages.take(4).chunked(2).forEach { pair ->
+                                                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    pair.forEach { AppIcon(iconFor(it), 15.dp) }
+                                                }
+                                            }
+                                        }
+                                    } else if (first != null) {
                                         AppIcon(iconFor(first), 34.dp)
                                     }
                                 }

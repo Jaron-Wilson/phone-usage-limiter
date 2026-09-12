@@ -77,6 +77,11 @@ Money folder arrives listing your banks rather than twenty you have never heard
 of, without anyone having to curate it by hand. `Folders > Tidy up` does the
 same again later, after you install or remove things.
 
+Folders can hold folders, up to four deep, which is enough for a term's worth
+of course folders under School and past the point where it helps. Loops are
+refused rather than drawn: a folder cannot hold itself or anything that already
+holds it.
+
 Edit contents, rename, reorder the folders, and reorder the apps inside each
 one under **Modes > Edit the folder library**. The first app in a folder is the
 one under your thumb when it opens, so that order is worth setting. Flip switches per
@@ -150,11 +155,20 @@ The next alarm is the system's own, the same one in the status bar, so it
 includes timers other apps set. It turns gold within the hour, and tapping
 opens whichever app owns it.
 
-Tap a folder to expand it in place. **Hold anything to start editing**, right
+Tap a folder to see inside, nested folders included, with a trail showing
+where you are and back stepping out one level at a time. Folder tiles show a
+glance of their contents rather than a count, because a count tells you nothing
+about which folder it is.
+
+**Hold anything to start editing**, right
 there on the home screen:
 
 - **drag** a row or tile to move it; it moves as you drag, so the gap you are
   aiming at is the gap you get
+- **rest on a folder** for half a second and it lights up: let go and the app
+  goes inside, its own row disappearing. The pause is what keeps this apart
+  from dragging *past* a folder, which is the same gesture without it
+- **drop a folder on a folder** to nest it
 - **x** takes it off this mode, leaving the folder itself and every other mode
   untouched
 - **+ app** and **+ folder** add to this mode
@@ -660,8 +674,11 @@ than touching the database. If you add anything the gate needs, add it there.
   app draws rather than before. It is a pause, not a lock, and a determined
   thumb can still get through by turning the service off in Settings. That is
   deliberate: a tool you cannot escape is one you will uninstall.
-- **Database migrations are destructive** (`fallbackToDestructiveMigration`),
-  and the schema is at version 6. Upgrading from an earlier build resets your
+- **Migrations are written from version 6 onwards.** Adding nested folders
+  came with a real migration rather than a wipe, because destructive migration
+  is fine while a schema is being invented and stops being fine once somebody
+  has arranged their phone. Earlier versions still fall back to destructive.
+  The schema is at version 7. Upgrading from an earlier build resets your
   modes and folders to the defaults, which is how retuned folders arrive.
 - **`QUERY_ALL_PACKAGES` is declared.** A launcher has to be able to list what
   is installed, and the `<queries>` element alone misses archived apps. This is
@@ -712,5 +729,7 @@ hardest to debug on a phone:
 - **`AgendaOrderTest`** - which of two events at the same minute comes first.
 - **`MovedTest`** - moving one row, which runs on every crossed boundary of a
   drag and must never lose or duplicate an item.
+- **`NestedFoldersTest`** - flattening nested folders, and refusing the loops
+  that would otherwise hang the launcher.
 
-113 tests, all passing.
+125 tests, all passing.

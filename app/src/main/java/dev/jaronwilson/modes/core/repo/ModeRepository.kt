@@ -38,7 +38,9 @@ data class PolicySnapshot(
     /** The active mode's home screen, in order, folders resolved. */
     val homeRows: List<HomeRow> = emptyList(),
     /** Apps exempt from every mode's guard, set by hand. */
-    val alwaysAllowed: Set<String> = emptySet()
+    val alwaysAllowed: Set<String> = emptySet(),
+    /** Every folder, needed to follow nesting inside the rows above. */
+    val allFolders: Map<Long, Folder> = emptyMap()
 ) {
     /**
      * Every package reachable from the current home screen. Under
@@ -49,8 +51,11 @@ data class PolicySnapshot(
      * A folder switched off for this mode contributes nothing, by way of
      * [HomeRow.reachable].
      */
+    private val foldersById: Map<Long, Folder> =
+        homeRows.mapNotNull { it.folder }.associateBy { it.id }
+
     val homePackages: Set<String> =
-        homeRows.flatMap { it.reachable }.toSet()
+        homeRows.flatMap { it.reachableDeep(allFolders.ifEmpty { foldersById }) }.toSet()
 
     /** Pre-compiled so matching a notification does not recompile regexes. */
     val compiledRules: List<Pair<NotifRule, Regex>> = notifRules.mapNotNull { rule ->
@@ -111,7 +116,8 @@ class ModeRepository(
                 extra.home.filter { it.modeId == mode.id },
                 extra.folders
             ),
-            alwaysAllowed = extra.allowed
+            alwaysAllowed = extra.allowed,
+            allFolders = extra.folders.associateBy { it.id }
         )
     }
 
