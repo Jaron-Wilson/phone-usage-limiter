@@ -79,7 +79,8 @@ class ModesDream : DreamService() {
             setTextColor(Color.parseColor("#A39D8F"))
             textSize = 16f
             typeface = sans
-            setLineSpacing(10f, 1f)
+            setLineSpacing(14f, 1f)
+            maxLines = 3
             setPadding(0, 22, 0, 0)
         }
 
@@ -129,7 +130,12 @@ class ModesDream : DreamService() {
                 agenda.text = events.joinToString("\n") { event ->
                     val at = if (event.allDay) "all day"
                     else fmt.format(Instant.ofEpochMilli(event.begin).atZone(ZoneId.systemDefault()))
-                    "$at   ${event.title}"
+                    // One line each. A calendar invite can carry a title forty
+                    // words long, and wrapping it turns a glance into reading.
+                    val title = if (event.title.length > 34) {
+                        event.title.take(33).trimEnd() + "\u2026"
+                    } else event.title
+                    "$at   $title"
                 }
             }
         }

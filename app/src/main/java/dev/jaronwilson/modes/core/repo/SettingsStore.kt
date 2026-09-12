@@ -14,6 +14,7 @@ import dev.jaronwilson.modes.launcher.Edge
 import dev.jaronwilson.modes.launcher.EdgePanels
 import dev.jaronwilson.modes.launcher.EdgeTarget
 import dev.jaronwilson.modes.core.Defaults
+import dev.jaronwilson.modes.core.Pkg
 import dev.jaronwilson.modes.core.model.ModeSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -154,11 +155,13 @@ class SettingsStore(private val context: Context) {
         edit { it[K.CALENDAR_PRIORITY] = ids.joinToString(",") }
 
     /** What a swipe in from each side of the home screen does. */
-    val leftEdge: Flow<EdgeTarget?> = context.dataStore.data.map {
-        EdgePanels.decode(it[K.EDGE_LEFT].orEmpty())
+    val leftEdge: Flow<EdgeTarget?> = context.dataStore.data.map { p ->
+        val stored = p[K.EDGE_LEFT]
+        if (stored == null) DEFAULT_LEFT_EDGE else EdgePanels.decode(stored)
     }
-    val rightEdge: Flow<EdgeTarget?> = context.dataStore.data.map {
-        EdgePanels.decode(it[K.EDGE_RIGHT].orEmpty())
+    val rightEdge: Flow<EdgeTarget?> = context.dataStore.data.map { p ->
+        val stored = p[K.EDGE_RIGHT]
+        if (stored == null) DEFAULT_RIGHT_EDGE else EdgePanels.decode(stored)
     }
 
     suspend fun setEdge(edge: Edge, target: EdgeTarget?) = edit {
@@ -167,7 +170,9 @@ class SettingsStore(private val context: Context) {
     }
 
     /** The link another phone reads when it taps yours. */
-    val tapCardUrl: Flow<String> = context.dataStore.data.map { it[K.TAP_CARD_URL].orEmpty() }
+    val tapCardUrl: Flow<String> = context.dataStore.data.map {
+        it[K.TAP_CARD_URL] ?: DEFAULT_TAP_CARD
+    }
     suspend fun setTapCardUrl(v: String) = edit { it[K.TAP_CARD_URL] = v }
 
     /** Places worth one tap from the home screen. */
@@ -205,6 +210,14 @@ class SettingsStore(private val context: Context) {
 
     companion object {
         const val DEFAULT_HIGHLIGHT = "(?i)\\bwork\\b"
+
+        /** Your own site, until you say otherwise. */
+        const val DEFAULT_TAP_CARD = "https://jaronwilson.org"
+
+        // Seeded so a swipe does something the first time it is tried. Both
+        // are changed, or cleared, under Rules.
+        val DEFAULT_LEFT_EDGE: EdgeTarget = EdgeTarget.App(Pkg.CALENDAR)
+        val DEFAULT_RIGHT_EDGE: EdgeTarget = EdgeTarget.App(Pkg.BOFA)
     }
 
     private fun encodeMap(map: Map<String, String>): String =

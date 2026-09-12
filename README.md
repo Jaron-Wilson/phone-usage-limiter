@@ -156,7 +156,7 @@ includes timers other apps set. It turns gold within the hour, and tapping
 opens whichever app owns it.
 
 Tap a folder and it comes forward over the home screen, the way One UI does
-it, with the screen behind it fogged. Nothing underneath moves to make room,
+it, with the screen behind it darkened. Nothing underneath moves to make room,
 so closing puts you back exactly where you were. Its name is a heading you can
 type into: a folder made by dropping one app on another arrives called
 "Folder" and gets renamed right there, which is where you are already looking.
@@ -432,7 +432,8 @@ nothing is considered active.
 ## Screen edges
 
 Swipe in from the very edge of the home screen. Each side does one thing, set
-under **Rules > Screen edges**:
+under **Rules > Screen edges**, and both start with something in them: the left
+opens Calendar, the right opens your bank.
 
 - **an app** is launched, because a shortcut that opened a launcher panel
   first would be slower than the icon it replaced
@@ -448,7 +449,8 @@ launcher. Anything typed without a scheme gets `https`, never `http`.
 
 ## Tap to share
 
-**Rules > Tap to share** puts one link on the phone's NFC radio. Tap another
+**Rules > Tap to share** puts one link on the phone's NFC radio. It starts set
+to `jaronwilson.org`. Tap another
 phone and it reads your portfolio or your LinkedIn, with nothing to install at
 the other end.
 
