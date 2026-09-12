@@ -14,14 +14,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,7 +26,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,28 +35,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.jaronwilson.modes.ui.theme.Brand
-import kotlin.math.roundToInt
 
 /**
  * A site, held against the side of the screen.
  *
- * The first version of this was a floating card with its own title bar, which
- * put a heading directly above the site's own heading and left black gaps at
- * top and bottom. It read as a browser window someone had shrunk.
+ * It takes the whole screen. Earlier versions floated it as a card, first with
+ * its own title bar and then held against one side, and both read as a browser
+ * window that had been made small: black showing round the edges, the page
+ * squeezed, a sliver of home screen doing nothing useful.
  *
- * This one behaves like the thing it is: a panel attached to an edge. Full
- * height, square against the side it came from and rounded on the inner one,
- * the page filling all of it. The only chrome is a thin strip along the
- * bottom, where a thumb already is, rather than at the top of a panel tall
- * enough that the top is out of reach.
+ * A site you put on an edge is a site you want to read. So it slides in from
+ * its edge and then it is simply the screen, with one thin strip along the
+ * bottom for the way out, at thumb height rather than at the top of something
+ * this tall.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -86,42 +78,18 @@ fun EdgeWebPanel(
         enter = fadeIn(tween(120)),
         exit = fadeOut(tween(120))
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                ),
-            contentAlignment = if (edge == Edge.LEFT) Alignment.CenterStart else Alignment.CenterEnd
-        ) {
+        Box(Modifier.fillMaxSize().background(Brand.Dark.paper)) {
             AnimatedVisibility(
                 visible = site != null,
                 enter = slideInHorizontally(tween(220)) { w -> if (edge == Edge.LEFT) -w else w },
                 exit = slideOutHorizontally(tween(160)) { w -> if (edge == Edge.LEFT) -w else w }
             ) {
                 val s = site ?: return@AnimatedVisibility
-                // Square where it meets the screen edge, rounded on the side
-                // that faces in: the shape says which edge it belongs to.
-                val shape = if (edge == Edge.LEFT) {
-                    RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
-                } else {
-                    RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp)
-                }
 
                 Column(
                     Modifier
-                        .fillMaxWidth(0.93f)
-                        .fillMaxHeight()
-                        .clip(shape)
+                        .fillMaxSize()
                         .background(Brand.Dark.paper)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {}
-                        )
                         // Shove it back towards its own edge to dismiss, the
                         // way it arrived.
                         .pointerInput(edge) {
