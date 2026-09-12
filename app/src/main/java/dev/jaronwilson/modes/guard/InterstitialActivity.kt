@@ -36,6 +36,7 @@ import androidx.lifecycle.lifecycleScope
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.core.model.EventKind
 import dev.jaronwilson.modes.core.repo.Stats
+import dev.jaronwilson.modes.ui.theme.Brand
 import dev.jaronwilson.modes.ui.theme.ModesTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -139,7 +140,7 @@ private fun Speedbump(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Brand.Launcher.background)
             .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -148,37 +149,36 @@ private fun Speedbump(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                modeName,
-                color = Color(0xFF8A8A93),
-                fontSize = 14.sp,
-                letterSpacing = 3.sp
+                modeName.uppercase(),
+                color = Brand.Launcher.accent,
+                style = MaterialTheme.typography.labelSmall
             )
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
             Text(
                 appLabel,
-                color = Color(0xFFE8E4DC),
-                fontSize = 34.sp,
+                color = Brand.Launcher.ink,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.headlineLarge
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             Text(
                 "You set this one aside for now.",
-                color = Color(0xFF8A8A93),
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center
+                color = Brand.Launcher.muted,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge
             )
             Spacer(Modifier.height(48.dp))
 
             Button(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.small,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE8E4DC),
-                    contentColor = Color.Black
+                    containerColor = Brand.Launcher.accent,
+                    contentColor = Brand.Dark.accentInk
                 )
             ) {
-                Text("Put it down")
+                Text("Put it down", style = MaterialTheme.typography.labelLarge)
             }
             Spacer(Modifier.height(8.dp))
             TextButton(
@@ -189,7 +189,8 @@ private fun Speedbump(
                 Text(
                     if (remaining > 0) "Open anyway ($remaining)"
                     else "Open anyway for $passMinutes min",
-                    color = if (remaining > 0) Color(0xFF4A4A52) else Color(0xFF8A8A93)
+                    color = if (remaining > 0) Brand.Launcher.faint else Brand.Launcher.muted,
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

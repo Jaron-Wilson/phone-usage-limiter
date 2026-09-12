@@ -2,7 +2,8 @@
     <style name="Theme.Modes" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowBackground">#17150F</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 
     <!-- Pure black, no wallpaper. The wallpaper is the first thing on a phone

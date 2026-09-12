@@ -38,6 +38,9 @@ import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.resolveHomeRows
 import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.ui.AppIcon
+import dev.jaronwilson.modes.ui.AppPicker
+import dev.jaronwilson.modes.ui.PickerPalette
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
@@ -205,38 +208,25 @@ fun HomeLayoutScreen(modeId: String, onDone: () -> Unit, onEditFolders: () -> Un
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 var query by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text("Find an app") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                val candidates = remember(query, apps, entries) {
-                    apps.filter { app -> entries.none { it.packageName == app.packageName } }
-                        .filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
-                        .take(40)
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    candidates.forEach { app ->
-                        FilterChip(
-                            selected = false,
-                            onClick = {
-                                scope.launch {
-                                    AppGraph.repo.homeDao.upsert(
-                                        HomeEntry(
-                                            modeId = modeId,
-                                            packageName = app.packageName,
-                                            sortOrder = entries.size
-                                        )
-                                    )
-                                }
-                            },
-                            label = { Text(app.label) },
-                            leadingIcon = { AppIcon(app.icon) }
-                        )
+                AppPicker(
+                    apps = apps.filter { app -> entries.none { it.packageName == app.packageName } },
+                    style = HomeStyle.ICONS,
+                    query = query,
+                    onQueryChange = { query = it },
+                    palette = PickerPalette.APP,
+                    placeholder = "Find an app",
+                    onPick = { app ->
+                        scope.launch {
+                            AppGraph.repo.homeDao.upsert(
+                                HomeEntry(
+                                    modeId = modeId,
+                                    packageName = app.packageName,
+                                    sortOrder = entries.size
+                                )
+                            )
+                        }
                     }
-                }
+                )
             }
 
             SectionHeader("The folders themselves")

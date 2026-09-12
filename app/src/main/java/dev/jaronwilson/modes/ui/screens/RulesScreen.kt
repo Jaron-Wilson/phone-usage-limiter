@@ -46,6 +46,9 @@ import dev.jaronwilson.modes.commute.Destination
 import dev.jaronwilson.modes.commute.Destinations
 import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.ui.AppIcon
+import dev.jaronwilson.modes.ui.AppPicker
+import dev.jaronwilson.modes.ui.PickerPalette
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.SwitchRow
 import dev.jaronwilson.modes.ui.RowItem
@@ -137,39 +140,25 @@ fun RulesScreen() {
                 val allowed by AppGraph.repo.settings.alwaysAllowed
                     .collectAsState(initial = emptySet())
                 var appQuery by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = appQuery,
-                    onValueChange = { appQuery = it },
-                    label = { Text("Find an app") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
                 val apps = remember { AppList.all(context, withIcons = true) }
-                val shown = remember(appQuery, apps, allowed) {
-                    val on = apps.filter { it.packageName in allowed }
-                    val rest = apps.filter { it.packageName !in allowed }
-                        .filter { appQuery.isBlank() || it.label.contains(appQuery, ignoreCase = true) }
-                        .take(30)
-                    on + rest
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    shown.forEach { app ->
+                AppPicker(
+                    apps = apps,
+                    style = HomeStyle.ICONS,
+                    query = appQuery,
+                    onQueryChange = { appQuery = it },
+                    selected = allowed,
+                    palette = PickerPalette.APP,
+                    limit = 30,
+                    placeholder = "Find an app",
+                    onPick = { app ->
                         val on = app.packageName in allowed
-                        FilterChip(
-                            selected = on,
-                            onClick = {
-                                scope.launch {
-                                    AppGraph.repo.settings.setAlwaysAllowed(
-                                        if (on) allowed - app.packageName
-                                        else allowed + app.packageName
-                                    )
-                                }
-                            },
-                            label = { Text(app.label) },
-                            leadingIcon = { AppIcon(app.icon) }
-                        )
+                        scope.launch {
+                            AppGraph.repo.settings.setAlwaysAllowed(
+                                if (on) allowed - app.packageName else allowed + app.packageName
+                            )
+                        }
                     }
-                }
+                )
             }
 
             SectionHeader("Places worth one tap")

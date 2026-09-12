@@ -69,7 +69,12 @@ import dev.jaronwilson.modes.notify.DigestPublisher
 import dev.jaronwilson.modes.schedule.AgendaOrder
 import dev.jaronwilson.modes.schedule.CalEvent
 import dev.jaronwilson.modes.ui.MainActivity
+import dev.jaronwilson.modes.ui.theme.Brand
 import dev.jaronwilson.modes.ui.theme.ModesTheme
+import dev.jaronwilson.modes.ui.AppPicker
+import dev.jaronwilson.modes.ui.PickerPalette
+import dev.jaronwilson.modes.ui.AppRowName
+import dev.jaronwilson.modes.ui.tileColors
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.LocalDate
@@ -78,11 +83,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.JulianFields
 
-private val Ink = Color(0xFFD8D4CC)
-private val InkBright = Color(0xFFE8E4DC)
-private val InkDim = Color(0xFF6A6A73)
-private val InkFaint = Color(0xFF3A3A44)
-private val Accent = Color(0xFFB8A88A)
+// One palette with the rest of the app, and with jaronwilson.org.
+private val Ink = Brand.Launcher.ink
+private val InkBright = Brand.Launcher.ink
+private val InkDim = Brand.Launcher.muted
+private val InkFaint = Brand.Launcher.faint
+private val Accent = Brand.Launcher.accent
 
 /**
  * A home screen with nothing on it but the day.
@@ -260,8 +266,8 @@ private fun Home() {
         AppGraph.scope.launch { AppGraph.repo.homeDao.delete(row.entry) }
     }
 
-    val allApps = remember { AppList.all(context) }
     val iconStyle = mode?.homeStyle == HomeStyle.ICONS
+    val pickerApps = remember(iconStyle) { AppList.all(context, withIcons = iconStyle) }
     // Icons are only loaded for the modes that draw them: decoding a hundred
     // launcher icons is not work a Sleep-mode home screen should ever do.
     val icons = remember(iconStyle) {
@@ -272,7 +278,7 @@ private fun Home() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Brand.Launcher.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 28.dp)
     ) {
@@ -281,14 +287,13 @@ private fun Home() {
 
             Text(
                 clock.format(DateTimeFormatter.ofPattern("H:mm")),
-                fontSize = 60.sp,
                 color = InkBright,
-                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 60.sp)
+                style = MaterialTheme.typography.displayLarge
             )
             Text(
                 clock.format(DateTimeFormatter.ofPattern("EEEE d MMMM")),
-                fontSize = 14.sp,
-                color = InkDim
+                color = InkDim,
+                style = MaterialTheme.typography.bodyMedium
             )
 
             Spacer(Modifier.height(16.dp))
@@ -383,6 +388,8 @@ private fun Home() {
                     picking = picking!!,
                     modeId = modeId.orEmpty(),
                     existingRows = rowsAll,
+                    apps = pickerApps,
+                    style = mode?.homeStyle ?: HomeStyle.TEXT,
                     onClose = { picking = null }
                 )
             } else if (!showAll && iconStyle) {
@@ -444,29 +451,21 @@ private fun Home() {
                     }
                 }
             } else {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("type a name", color = InkFaint) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(16.dp))
-                val filtered = remember(query, allApps) {
-                    if (query.isBlank()) allApps
-                    else allApps.filter { it.label.contains(query, ignoreCase = true) }
-                }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    items(filtered, key = { it.packageName }) { app ->
-                        AppRow(app.label) {
-                            Stats.log(EventKind.APP_OPENED, app.packageName)
-                            AppList.launch(context, app.packageName)
-                            showAll = false
-                            query = ""
-                        }
+                AppPicker(
+                    apps = pickerApps,
+                    style = mode?.homeStyle ?: HomeStyle.TEXT,
+                    query = query,
+                    onQueryChange = { query = it },
+                    palette = PickerPalette.LAUNCHER,
+                    limit = 60,
+                    emptyText = "Nothing by that name",
+                    onPick = { app ->
+                        Stats.log(EventKind.APP_OPENED, app.packageName)
+                        AppList.launch(context, app.packageName)
+                        showAll = false
+                        query = ""
                     }
-                }
+                )
             }
         }
     }
@@ -561,11 +560,11 @@ private fun Agenda(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     current.title,
-                    fontSize = 26.sp,
                     color = InkBright,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = if (highlight?.containsMatchIn(current.title) == true) {
                         FontWeight.Bold
-                    } else FontWeight.Normal,
+                    } else FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable { openEvent(context, current) }
@@ -582,11 +581,11 @@ private fun Agenda(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     next.title,
-                    fontSize = 26.sp,
                     color = InkBright,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = if (highlight?.containsMatchIn(next.title) == true) {
                         FontWeight.Bold
-                    } else FontWeight.Normal,
+                    } else FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable { openEvent(context, next) }
@@ -820,15 +819,7 @@ private fun EventDot(argb: Int, size: androidx.compose.ui.unit.Dp) {
 
 @Composable
 private fun AppRow(label: String, onClick: () -> Unit) {
-    Text(
-        text = label,
-        fontSize = 22.sp,
-        color = Ink,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 11.dp)
-    )
+    AppRowName(label = label, colors = tileColors(PickerPalette.LAUNCHER), onClick = onClick)
 }
 
 private fun openApp(

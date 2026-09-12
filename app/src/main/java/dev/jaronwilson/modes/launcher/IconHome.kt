@@ -36,6 +36,11 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import dev.jaronwilson.modes.core.model.HomeRow
+import dev.jaronwilson.modes.ui.AppTileIcon
+import dev.jaronwilson.modes.ui.FolderGlyph
+import dev.jaronwilson.modes.ui.PickerPalette
+import dev.jaronwilson.modes.ui.tileColors
+import dev.jaronwilson.modes.ui.theme.Brand
 
 /**
  * The home screen for modes where the phone is yours.
@@ -113,21 +118,13 @@ private fun AppTile(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    AppTileIcon(
+        label = label,
+        icon = icon,
+        colors = tileColors(PickerPalette.LAUNCHER),
+        onClick = onClick,
         modifier = Modifier.tileClick(onClick, onLongClick)
-    ) {
-        AppIconImage(icon, 46.dp)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            label,
-            fontSize = 11.sp,
-            color = Color(0xFFB8B4AC),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-    }
+    )
 }
 
 @Composable
@@ -138,30 +135,18 @@ private fun FolderTile(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val colors = tileColors(PickerPalette.LAUNCHER)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.tileClick(onClick, onLongClick)
+        modifier = Modifier.tileClick(onClick, onLongClick).padding(vertical = 6.dp)
     ) {
-        Box(
-            Modifier
-                .size(46.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(Color(0x1FFFFFFF)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                icons.chunked(2).forEach { pair ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        pair.forEach { AppIconImage(it, 15.dp) }
-                    }
-                }
-            }
-        }
+        FolderGlyph(icons, 52.dp, colors)
         Spacer(Modifier.height(6.dp))
         Text(
             "$name  $count",
-            fontSize = 11.sp,
-            color = Color(0xFFB8B4AC),
+            fontSize = 11.5.sp,
+            fontFamily = Brand.sans,
+            color = colors.muted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
@@ -192,4 +177,3 @@ private fun Modifier.tileClick(onClick: () -> Unit, onLongClick: () -> Unit): Mo
     this
         .clip(RoundedCornerShape(12.dp))
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-        .padding(vertical = 4.dp)

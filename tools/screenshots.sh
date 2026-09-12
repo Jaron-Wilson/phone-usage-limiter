@@ -62,8 +62,14 @@ wanted=("$@")
 # accessibility tree can: it describes what is actually visible.
 front_package() {
     "$ADB" shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-    "$ADB" shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r' \
-        | grep -oE 'package="[^"]+"' | sort | uniq -c | sort -rn | head -1 \
+    local tree
+    tree=$("$ADB" shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r')
+    # The shade or the keyguard anywhere in the tree means it is on top of the
+    # app, however many of the app's own nodes sit underneath it.
+    if printf '%s' "$tree" | grep -q 'package="com.android.systemui"'; then
+        printf 'com.android.systemui'; return
+    fi
+    printf '%s' "$tree" | grep -oE 'package="[^"]+"' | sort | uniq -c | sort -rn | head -1 \
         | grep -oE '"[^"]+"' | tr -d '"'
 }
 

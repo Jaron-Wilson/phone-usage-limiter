@@ -43,14 +43,20 @@ import dev.jaronwilson.modes.core.model.HomeRow
 import androidx.compose.ui.platform.LocalContext
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.ui.AppIcon
+import dev.jaronwilson.modes.ui.AppPicker
+import dev.jaronwilson.modes.ui.FolderGlyph
+import dev.jaronwilson.modes.ui.PickerPalette
+import dev.jaronwilson.modes.ui.tileColors
+import dev.jaronwilson.modes.ui.theme.Brand
+import dev.jaronwilson.modes.core.model.HomeStyle
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val Ink = Color(0xFFD8D4CC)
-private val InkBright = Color(0xFFE8E4DC)
-private val InkDim = Color(0xFF6A6A73)
-private val InkFaint = Color(0xFF3A3A44)
-private val Accent = Color(0xFFB8A88A)
+private val Ink = Brand.Launcher.ink
+private val InkBright = Brand.Launcher.ink
+private val InkDim = Brand.Launcher.muted
+private val InkFaint = Brand.Launcher.faint
+private val Accent = Brand.Launcher.accent
 
 /**
  * Rearranging the home screen where you actually use it.
@@ -85,7 +91,7 @@ fun EditBar(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x14FFFFFF))
+            .background(Brand.Launcher.surface)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -160,7 +166,7 @@ fun EditableRowList(
                     .then(
                         if (isAbsorbTarget) Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0x33B8A88A))
+                            .background(Brand.Launcher.accent.copy(alpha = 0.22f))
                         else Modifier
                     )
                     .pointerInput(rows.size, index) {
@@ -326,8 +332,8 @@ fun EditableIconGrid(
                                         .size(46.dp)
                                         .clip(RoundedCornerShape(13.dp))
                                         .background(
-                                            if (absorbInto == index) Color(0x66B8A88A)
-                                            else Color(0x1FFFFFFF)
+                                            if (absorbInto == index) Brand.Launcher.accent.copy(alpha = 0.4f)
+                                            else Brand.Launcher.surface
                                         )
                                         .clickable { onOpen(row) },
                                     contentAlignment = Alignment.Center
@@ -354,7 +360,7 @@ fun EditableIconGrid(
                             Text(
                                 label(row),
                                 fontSize = 11.sp,
-                                color = if (isDragged) InkBright else Color(0xFFB8B4AC),
+                                color = if (isDragged) InkBright else InkDim,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -373,11 +379,11 @@ private fun RemoveBadge(onClick: () -> Unit) {
         Modifier
             .size(22.dp)
             .clip(CircleShape)
-            .background(Color(0xFF3A2A2A))
+            .background(Brand.Launcher.accent.copy(alpha = 0.18f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text("x", fontSize = 13.sp, color = Color(0xFFD98C7A))
+        Text("x", fontSize = 13.sp, color = Brand.Launcher.accent)
     }
 }
 
@@ -413,11 +419,12 @@ fun PickerPanel(
     picking: Picking,
     modeId: String,
     existingRows: List<HomeRow>,
+    apps: List<AppEntry>,
+    style: HomeStyle,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val apps = remember { AppList.all(context) }
     val folders by AppGraph.repo.folderDao.observeAll().collectAsState(initial = emptyList())
     var query by remember { mutableStateOf("") }
 
@@ -468,25 +475,26 @@ fun PickerPanel(
 
             Picking.App -> {
                 val used = existingRows.mapNotNull { it.entry.packageName }.toSet()
-                SearchBox(query) { query = it }
-                Spacer(Modifier.height(10.dp))
-                apps.filterNot { it.packageName in used }
-                    .filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
-                    .take(20)
-                    .forEach { app ->
-                        PickRow(app.label) {
-                            scope.launch {
-                                AppGraph.repo.homeDao.upsert(
-                                    dev.jaronwilson.modes.core.model.HomeEntry(
-                                        modeId = modeId,
-                                        packageName = app.packageName,
-                                        sortOrder = existingRows.size
-                                    )
+                AppPicker(
+                    apps = apps.filterNot { it.packageName in used },
+                    style = style,
+                    query = query,
+                    onQueryChange = { query = it },
+                    palette = PickerPalette.LAUNCHER,
+                    limit = 24,
+                    onPick = { app ->
+                        scope.launch {
+                            AppGraph.repo.homeDao.upsert(
+                                dev.jaronwilson.modes.core.model.HomeEntry(
+                                    modeId = modeId,
+                                    packageName = app.packageName,
+                                    sortOrder = existingRows.size
                                 )
-                            }
-                            onClose()
+                            )
                         }
+                        onClose()
                     }
+                )
             }
 
             is Picking.InFolder -> {
@@ -524,34 +532,26 @@ fun PickerPanel(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                SearchBox(query) { query = it }
-                Spacer(Modifier.height(10.dp))
-                apps.filterNot { it.packageName in folder.packages }
-                    .filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
-                    .take(15)
-                    .forEach { app ->
-                        PickRow("+  ${app.label}") {
-                            scope.launch {
-                                AppGraph.repo.folderDao.upsert(
-                                    folder.copy(packages = folder.packages + app.packageName)
-                                )
-                            }
+                Text("ADD", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
+                Spacer(Modifier.height(8.dp))
+                AppPicker(
+                    apps = apps.filterNot { it.packageName in folder.packages },
+                    style = style,
+                    query = query,
+                    onQueryChange = { query = it },
+                    palette = PickerPalette.LAUNCHER,
+                    limit = 20,
+                    onPick = { app ->
+                        scope.launch {
+                            AppGraph.repo.folderDao.upsert(
+                                folder.copy(packages = folder.packages + app.packageName)
+                            )
                         }
                     }
+                )
             }
         }
     }
-}
-
-@Composable
-private fun SearchBox(value: String, onChange: (String) -> Unit) {
-    androidx.compose.material3.OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        placeholder = { Text("type a name", color = InkFaint) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-    )
 }
 
 @Composable

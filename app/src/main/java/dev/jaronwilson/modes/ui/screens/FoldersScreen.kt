@@ -54,6 +54,9 @@ import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.launcher.AppEntry
 import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.ui.AppIcon
+import dev.jaronwilson.modes.ui.AppPicker
+import dev.jaronwilson.modes.ui.PickerPalette
+import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import kotlinx.coroutines.launch
 
@@ -309,31 +312,16 @@ private fun FolderCard(
 
                 Spacer(Modifier.height(16.dp))
                 Label("Add an app")
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("Search") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                AppPicker(
+                    apps = apps.filter { it.packageName !in folder.packages },
+                    style = HomeStyle.ICONS,
+                    query = query,
+                    onQueryChange = { query = it },
+                    palette = PickerPalette.APP,
+                    limit = if (query.isBlank()) 12 else 30,
+                    placeholder = "Search",
+                    onPick = { app -> onSave(folder.copy(packages = folder.packages + app.packageName)) }
                 )
-                Spacer(Modifier.height(8.dp))
-                val candidates = remember(query, apps, folder.packages) {
-                    apps.filter { it.packageName !in folder.packages }
-                        .filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
-                        .take(if (query.isBlank()) 12 else 30)
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    candidates.forEach { app ->
-                        FilterChip(
-                            selected = false,
-                            onClick = {
-                                onSave(folder.copy(packages = folder.packages + app.packageName))
-                            },
-                            label = { Text(app.label) },
-                            leadingIcon = { AppIcon(app.icon, 16.dp) }
-                        )
-                    }
-                }
 
                 Spacer(Modifier.height(18.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))

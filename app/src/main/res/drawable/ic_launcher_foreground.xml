@@ -1,8 +1,11 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#E8E4DC"
-        android:pathData="M54,30 m-16,0 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0" />
-    <path android:fillColor="#E8E4DC" android:pathData="M32,64h44v5H32z" />
-    <path android:fillColor="#E8E4DC" android:pathData="M38,74h32v5H38z" />
+    <!-- A ring for the mode, two lines for the day beneath it. Accent on paper,
+         matching the site. -->
+    <path android:fillColor="#D97A4A"
+        android:pathData="M54,31 m-15,0 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 M54,36.5 m-9.5,0 a9.5,9.5 0 1,1 19,0 a9.5,9.5 0 1,1 -19,0"
+        android:fillType="evenOdd" />
+    <path android:fillColor="#EDE9E0" android:pathData="M33,62h42v4.5H33z" />
+    <path android:fillColor="#A39D8F" android:pathData="M33,72h30v4.5H33z" />
 </vector>

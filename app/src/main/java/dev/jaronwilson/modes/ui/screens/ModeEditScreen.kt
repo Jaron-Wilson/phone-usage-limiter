@@ -34,6 +34,8 @@ import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifClass
 import dev.jaronwilson.modes.launcher.AppList
 import dev.jaronwilson.modes.ui.AppIcon
+import dev.jaronwilson.modes.ui.AppPicker
+import dev.jaronwilson.modes.ui.PickerPalette
 import dev.jaronwilson.modes.ui.Panel
 import dev.jaronwilson.modes.ui.ScreenScaffold
 import dev.jaronwilson.modes.ui.SectionHeader
@@ -113,41 +115,24 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 var blockQuery by remember { mutableStateOf("") }
-                OutlinedTextField(
-                    value = blockQuery,
-                    onValueChange = { blockQuery = it },
-                    label = { Text("Find an app") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                // Chosen ones first so they are never scrolled out of sight,
-                // then whatever matches the search. A phone with a hundred apps
-                // cannot be edited from an alphabetical slice of sixty.
-                val shown = remember(blockQuery, apps, current.blockedPackages) {
-                    val chosen = apps.filter { it.packageName in current.blockedPackages }
-                    val rest = apps.filter { it.packageName !in current.blockedPackages }
-                        .filter { blockQuery.isBlank() || it.label.contains(blockQuery, ignoreCase = true) }
-                        .take(40)
-                    chosen + rest
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    shown.forEach { app ->
+                AppPicker(
+                    apps = apps,
+                    style = HomeStyle.ICONS,
+                    query = blockQuery,
+                    onQueryChange = { blockQuery = it },
+                    selected = current.blockedPackages,
+                    palette = PickerPalette.APP,
+                    placeholder = "Find an app",
+                    onPick = { app ->
                         val on = app.packageName in current.blockedPackages
-                        FilterChip(
-                            selected = on,
-                            onClick = {
-                                update { m ->
-                                    m.copy(
-                                        blockedPackages = if (on) m.blockedPackages - app.packageName
-                                        else m.blockedPackages + app.packageName
-                                    )
-                                }
-                            },
-                            label = { Text(app.label) },
-                            leadingIcon = { AppIcon(app.icon) }
-                        )
+                        update { m ->
+                            m.copy(
+                                blockedPackages = if (on) m.blockedPackages - app.packageName
+                                else m.blockedPackages + app.packageName
+                            )
+                        }
                     }
-                }
+                )
             }
 
             SectionHeader("Home screen")

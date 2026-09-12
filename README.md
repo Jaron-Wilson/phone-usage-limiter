@@ -388,6 +388,29 @@ The home screen and the Now tab say which of these it is: "no calendar is
 synced to this phone" is a different problem from "nothing today", and it is
 labelled as such, with a tap through to account sync settings.
 
+## Design
+
+The app borrows its whole look from [jaronwilson.org](https://jaronwilson.org):
+paper and ink, **Fraunces** for anything that is a heading, **Inter** for
+anything that is read, a burnt-orange accent, hairline borders, 10px cards and
+pill chips. `ui/theme/Brand.kt` is that site's `style.css` translated into
+Compose tokens, value for value, and nothing else in the app names a colour.
+
+Two rooms, one language. The settings side is the site's dark mode on paper.
+The home screen is black, because there should be nothing on it to look at but
+the day, and takes its type and accent from the same palette so the two still
+belong to each other.
+
+**Pickers match the room.** The complaint that drove the redesign was choosing
+an app: an icon home screen that opened a text list, or a text home screen
+that opened an icon grid, felt like falling through the floor. Every place an
+app is chosen now goes through one `AppPicker`, drawn in the style of the
+screen it was opened from. The grid uses the same tile as the icon home
+screen; the list uses the same row as the text one; the search box takes the
+room's colours. Inside the settings app, where there is no mode on screen,
+pickers are always icons, because that is the side of the app meant to be
+pleasant to edit.
+
 ## Activating it
 
 Editing is in the app. The simple part only starts when Modes becomes the home
@@ -463,17 +486,13 @@ would show a real bank list, app inventory or screen time are left out of the
 repo on purpose; take your own with the script below.
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="270" alt="The home screen: black, the time, the running mode, today's calendar, then folders" />
-  <img src="docs/screenshots/now.png" width="270" alt="Now: the running mode and why, switch by hand, what is waiting, today" />
-  <img src="docs/screenshots/modes.png" width="270" alt="Modes: the five modes and what each lets through" />
-</p>
-<p align="center">
-  <img src="docs/screenshots/rules.png" width="270" alt="Rules: people who always get through, calendar rules, time of day rules" />
-  <img src="docs/screenshots/digest.png" width="270" alt="Waiting: what is being held, and the last 24 hours" />
+  <img src="docs/screenshots/modes.png" width="300" alt="Modes: the six modes and what each lets through, in the redesigned look" />
 </p>
 
-Left to right: the home screen (this is the whole point), the Now tab, the mode
-list, the rules, and the waiting room.
+Only the Modes screen is published here. The home screen shows whatever is on
+the owner's calendar, and the Rules and Stats screens show calendar names and
+screen time, so those are yours to take with the script below rather than
+mine to publish.
 
 ### Taking your own
 
