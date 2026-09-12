@@ -49,7 +49,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -79,6 +83,7 @@ import dev.jaronwilson.modes.ui.PickerPalette
 import dev.jaronwilson.modes.ui.AppRowName
 import dev.jaronwilson.modes.ui.tileColors
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -311,6 +316,7 @@ private fun Home() {
 
     val density = LocalDensity.current
     fun fire(target: EdgeTarget?, edge: Edge) {
+        android.util.Log.d("Modes", "edge swipe from $edge, ${target?.javaClass?.simpleName ?: "nothing set"}")
         when (target) {
             is EdgeTarget.App -> {
                 Stats.log(EventKind.APP_OPENED, target.packageName)
@@ -330,27 +336,45 @@ private fun Home() {
             .background(Brand.Launcher.background)
             .pointerInput(leftEdge, rightEdge, editing) {
                 if (editing) return@pointerInput
-                // Only a drag that begins within a thumb's width of an edge
-                // counts, so the gesture cannot be triggered by scrolling the
-                // list in the middle of the screen.
-                val edgeZone = with(density) { 32.dp.toPx() }
-                val travel = with(density) { 72.dp.toPx() }
-                var startX = 0f
-                var total = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { offset -> startX = offset.x; total = 0f },
-                    onHorizontalDrag = { change, delta ->
-                        total += delta
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        val width = size.width.toFloat()
-                        when {
-                            startX <= edgeZone && total > travel -> fire(leftEdge, Edge.LEFT)
-                            startX >= width - edgeZone && total < -travel -> fire(rightEdge, Edge.RIGHT)
+                val edgeZone = with(density) { 28.dp.toPx() }
+                val travel = with(density) { 64.dp.toPx() }
+
+                // Watched from the Initial pass, which is the whole trick: the
+                // lists and grids on this screen are scrollable, and in the
+                // Main pass a child takes the pointer before a parent ever
+                // sees it. Looking first lets the edge decide whether this
+                // gesture is its business, and only then consume it.
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial
+                    )
+                    val width = size.width.toFloat()
+                    val fromLeft = down.position.x <= edgeZone
+                    val fromRight = down.position.x >= width - edgeZone
+                    if (!fromLeft && !fromRight) return@awaitEachGesture
+
+                    var dx = 0f
+                    var dy = 0f
+                    var fired = false
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (change.changedToUpIgnoreConsumed()) break
+                        dx += change.positionChange().x
+                        dy += change.positionChange().y
+                        // Clearly sideways, not a diagonal off a scroll.
+                        if (!fired && abs(dx) > travel && abs(dx) > abs(dy) * 1.5f) {
+                            when {
+                                fromLeft && dx > 0 -> { fire(leftEdge, Edge.LEFT); fired = true }
+                                fromRight && dx < 0 -> { fire(rightEdge, Edge.RIGHT); fired = true }
+                            }
                         }
+                        // Only once it is ours, so an ordinary scroll that
+                        // happens to begin near an edge still scrolls.
+                        if (fired) change.consume()
                     }
-                )
+                }
             }
     ) {
       Box(

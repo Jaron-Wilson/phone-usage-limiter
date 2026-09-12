@@ -442,7 +442,12 @@ opens Calendar, the right opens your bank.
   through the browser to do that leaves a tab you then have to close
 
 Only a drag starting within a thumb's width of the edge counts, so scrolling
-the middle of the screen never triggers it. The web panel is deliberately
+the middle of the screen never triggers it, and the gesture is watched on the
+pointer's initial pass. That matters: the home screen is full of scrollable
+lists and grids, and in the ordinary pass a scrollable child takes a drag
+before its parent ever sees it, which is why the first version of this did
+nothing at all. Looking first, then consuming only once the drag is clearly
+sideways and clearly from an edge, leaves ordinary scrolling untouched. The web panel is deliberately
 plain: no file or content access, no geolocation, and any link leaving the site
 you configured is handed to the real browser rather than followed inside a
 launcher. Anything typed without a scheme gets `https`, never `http`.
