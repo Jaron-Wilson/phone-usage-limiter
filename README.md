@@ -441,9 +441,17 @@ opens Calendar, the right opens your bank.
 
 - **an app** is launched, because a shortcut that opened a launcher panel
   first would be slower than the icon it replaced
-- **a site** opens in a panel over the home screen. The point of putting a
-  dashboard on an edge is to read one number and put the phone down, and going
-  through the browser to do that leaves a tab you then have to close
+- **a site** opens in a panel held against the edge it came from: full height,
+  square on that side and rounded on the other, the page filling all of it.
+  The point of putting a dashboard on an edge is to read one number and put the
+  phone down, and going through the browser to do that leaves a tab you then
+  have to close
+
+The panel's only chrome is a thin strip along the bottom, where a thumb already
+is. An earlier version put a title bar at the top, which set a heading directly
+above the site's own heading and left the controls out of reach on a panel that
+tall. Shove it back towards its edge to dismiss it, or press back, which walks
+the site's own history first and only then closes.
 
 Only a drag starting within a thumb's width of the edge counts, so scrolling
 the middle of the screen never triggers it, and the gesture is watched on the
