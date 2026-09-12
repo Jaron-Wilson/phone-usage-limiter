@@ -155,10 +155,14 @@ The next alarm is the system's own, the same one in the status bar, so it
 includes timers other apps set. It turns gold within the hour, and tapping
 opens whichever app owns it.
 
-Tap a folder to see inside, nested folders included, with a trail showing
-where you are and back stepping out one level at a time. Folder tiles show a
-glance of their contents rather than a count, because a count tells you nothing
-about which folder it is.
+Tap a folder and it comes forward over the home screen, the way One UI does
+it, with the screen behind it fogged. Nothing underneath moves to make room,
+so closing puts you back exactly where you were. Its name is a heading you can
+type into: a folder made by dropping one app on another arrives called
+"Folder" and gets renamed right there, which is where you are already looking.
+
+Nested folders open in the same panel, with a trail of where you are, and back
+steps out a level at a time.
 
 **Hold anything to start editing**, right
 there on the home screen:
@@ -169,6 +173,8 @@ there on the home screen:
   goes inside, its own row disappearing. The pause is what keeps this apart
   from dragging *past* a folder, which is the same gesture without it
 - **drop a folder on a folder** to nest it
+- **drop one app on another** and they become a folder, which opens so you can
+  name it
 - **x** takes it off this mode, leaving the folder itself and every other mode
   untouched
 - **+ app** and **+ folder** add to this mode
@@ -423,6 +429,52 @@ dialog puts it back.
 Until that and the other required switches are on, the Now screen says so and
 nothing is considered active.
 
+## Screen edges
+
+Swipe in from the very edge of the home screen. Each side does one thing, set
+under **Rules > Screen edges**:
+
+- **an app** is launched, because a shortcut that opened a launcher panel
+  first would be slower than the icon it replaced
+- **a site** opens in a panel over the home screen. The point of putting a
+  dashboard on an edge is to read one number and put the phone down, and going
+  through the browser to do that leaves a tab you then have to close
+
+Only a drag starting within a thumb's width of the edge counts, so scrolling
+the middle of the screen never triggers it. The web panel is deliberately
+plain: no file or content access, no geolocation, and any link leaving the site
+you configured is handed to the real browser rather than followed inside a
+launcher. Anything typed without a scheme gets `https`, never `http`.
+
+## Tap to share
+
+**Rules > Tap to share** puts one link on the phone's NFC radio. Tap another
+phone and it reads your portfolio or your LinkedIn, with nothing to install at
+the other end.
+
+Android removed Beam, so a tap can no longer push a link by itself. What still
+works is pretending to be a card: the app claims the NFC Forum Type 4 Tag
+application id and answers the four commands a reader sends, so what touches
+your phone sees exactly what it would see touching a printed NFC sticker. The
+capability container marks it read only, so nobody can write to your phone by
+touching it, and the link is read at the moment of the tap, so changing it
+takes effect on the very next one.
+
+The byte layout is unit tested, because its failure mode is silent: one byte
+wrong and the tap simply does nothing, with no error anywhere to read.
+
+## Always on
+
+**No app can replace Android's always-on display.** That belongs to the system
+and there is no API for it at any permission level.
+
+What Android does hand out is the screensaver slot, which runs for as long as
+the phone is charging or docked, and that is genuinely always on while it
+lasts. Modes fills it with the time, the current mode and what is next, in the
+same type as everything else, black and dimmed, static and refreshed once a
+minute. Set it under **Settings > Display > Screen saver**, or from the button
+in Rules.
+
 ## The lock screen
 
 **No app can replace Android's lock screen.** That is a platform restriction
@@ -659,6 +711,10 @@ guard/GuardPolicy         whether an app may be opened, pure and well tested
 guard/AppGuardService     the foreground app watcher
 launcher/LauncherActivity the minimal home screen, agenda and folders
 launcher/EditHome         dragging, adding and removing, in place
+launcher/FolderOverlay    a folder, opened over the home screen
+launcher/EdgeOverlay      a site, opened from a screen edge
+nfc/NdefPayload           the bytes a reader sees, as arithmetic
+dream/ModesDream          the screensaver
 tools/AppListExport       builds the dump, shared by the app and the script
 tools/ShareDump           clipboard and share sheet
 tools/ExportReceiver      lets adb ask for a dump without opening the app
@@ -746,9 +802,11 @@ hardest to debug on a phone:
 - **`DuplicateRowsTest`** - repairing a home screen that seeded itself twice.
 - **`DestinationsTest`** - storing places without mangling an address.
 - **`AgendaOrderTest`** - which of two events at the same minute comes first.
+- **`NfcAndEdgeTest`** - the exact bytes a reader sees on a tap, and what a
+  screen edge resolves a typed address to.
 - **`MovedTest`** - moving one row, which runs on every crossed boundary of a
   drag and must never lose or duplicate an item.
 - **`NestedFoldersTest`** - flattening nested folders, and refusing the loops
   that would otherwise hang the launcher.
 
-125 tests, all passing.
+140 tests, all passing.

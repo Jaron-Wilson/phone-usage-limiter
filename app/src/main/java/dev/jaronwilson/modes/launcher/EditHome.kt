@@ -182,10 +182,11 @@ fun EditableRowList(
                                 val steps = (offsetY / rowPx).roundToInt()
                                 val to = (from + steps).coerceIn(0, rows.lastIndex)
                                 val draggedIsApp = rows.getOrNull(from)?.isFolder == false
-                                val targetIsFolder = rows.getOrNull(to)?.isFolder == true
 
-                                if (to != from && targetIsFolder && draggedIsApp) {
-                                    // Hovering a folder: wait, then absorb.
+                                if (to != from && draggedIsApp) {
+                                    // Resting on anything merges: a folder
+                                    // absorbs the app, an app becomes a folder
+                                    // holding both.
                                     val now = System.currentTimeMillis()
                                     if (hoverIndex != to) {
                                         hoverIndex = to; hoverSince = now; absorbInto = -1
@@ -207,7 +208,11 @@ fun EditableRowList(
                 Text("::", fontSize = 15.sp, color = if (isDragged) Accent else InkFaint)
                 Spacer(Modifier.width(14.dp))
                 Text(
-                    label(row) + if (isAbsorbTarget) "   drop in" else "",
+                    label(row) + when {
+                        isAbsorbTarget && row.isFolder -> "   drop in"
+                        isAbsorbTarget -> "   make a folder"
+                        else -> ""
+                    },
                     fontSize = 21.sp,
                     color = when {
                         isAbsorbTarget -> Accent
@@ -300,8 +305,7 @@ fun EditableIconGrid(
                                         val from = dragging
                                         val to = (from + step).coerceIn(0, rows.lastIndex)
                                         val draggedIsApp = rows.getOrNull(from)?.isFolder == false
-                                        val targetIsFolder = rows.getOrNull(to)?.isFolder == true
-                                        if (to != from && targetIsFolder && draggedIsApp) {
+                                        if (to != from && draggedIsApp) {
                                             val now = System.currentTimeMillis()
                                             if (hoverIndex != to) {
                                                 hoverIndex = to; hoverSince = now; absorbInto = -1

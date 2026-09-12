@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The NFC Forum Type 4 Tag application id. Claiming it is what makes a
+     reader treat this phone as a tag holding one link. -->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/tap_card_name"
+    android:requireDeviceUnlock="true"
+    android:apduServiceBanner="@drawable/ic_stat_modes">
+    <aid-group
+        android:description="@string/tap_card_name"
+        android:category="other">
+        <aid-filter android:name="D2760000850101" />
+    </aid-group>
+</host-apdu-service>

@@ -49,7 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -123,11 +126,15 @@ private fun Home() {
     val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    // Which folder is open, as a trail so a nested one can be backed out of a
+    // level at a time. Empty means the home screen itself.
     var openFolder by remember { mutableStateOf<Long?>(null) }
     // A trail rather than a single id: opening a folder inside a folder has to
     // be reversible one step at a time.
     var folderTrail by remember { mutableStateOf<List<Long>>(emptyList()) }
     var editing by remember { mutableStateOf(false) }
+    var openSite by remember { mutableStateOf<EdgeTarget.Site?>(null) }
+    var openSiteEdge by remember { mutableStateOf(Edge.LEFT) }
     var picking by remember { mutableStateOf<Picking?>(null) }
 
     val mode by AppGraph.repo.activeMode.collectAsState(initial = null)
@@ -182,6 +189,8 @@ private fun Home() {
     // Refreshed on its own clock: the calendar changes far less often than the
     // minute does, and querying the provider is not free.
     val places by AppGraph.repo.settings.destinations.collectAsState(initial = emptyList())
+    val leftEdge by AppGraph.repo.settings.leftEdge.collectAsState(initial = null)
+    val rightEdge by AppGraph.repo.settings.rightEdge.collectAsState(initial = null)
     val calendarPriority by AppGraph.repo.settings.calendarPriority
         .collectAsState(initial = emptyList())
     val highlightPattern by AppGraph.repo.settings.agendaHighlight
@@ -206,12 +215,14 @@ private fun Home() {
 
     BackHandler(
         enabled = showAll || openFolder != null || editing || picking != null ||
-            folderTrail.isNotEmpty()
+            folderTrail.isNotEmpty() || openSite != null
     ) {
         when {
+            openSite != null -> openSite = null
             picking != null -> picking = null
             editing -> editing = false
-            folderTrail.isNotEmpty() -> folderTrail = folderTrail.dropLast(1)
+            folderTrail.size > 1 -> folderTrail = folderTrail.dropLast(1)
+            openFolder != null -> { openFolder = null; folderTrail = emptyList() }
             else -> {
                 showAll = false
                 openFolder = null
@@ -238,25 +249,47 @@ private fun Home() {
      * something surprising.
      */
     fun dropInto(dragged: HomeRow, target: HomeRow) {
-        val folder = target.folder ?: return
         AppGraph.scope.launch {
             val byId = AppGraph.repo.folderDao.getAll().associateBy { it.id }
-            val child = dragged.folder
-            if (child != null) {
-                if (!canNest(folder, child, byId)) return@launch
-                if (child.id in folder.subFolders) return@launch
-                AppGraph.repo.folderDao.upsert(
-                    folder.copy(subFolders = folder.subFolders + child.id)
-                )
-            } else {
-                val pkg = dragged.entry.packageName ?: return@launch
-                if (pkg !in folder.packages) {
+            val folder = target.folder
+
+            if (folder != null) {
+                val child = dragged.folder
+                if (child != null) {
+                    if (!canNest(folder, child, byId)) return@launch
+                    if (child.id in folder.subFolders) return@launch
                     AppGraph.repo.folderDao.upsert(
-                        folder.copy(packages = folder.packages + pkg)
+                        folder.copy(subFolders = folder.subFolders + child.id)
                     )
+                } else {
+                    val pkg = dragged.entry.packageName ?: return@launch
+                    if (pkg !in folder.packages) {
+                        AppGraph.repo.folderDao.upsert(folder.copy(packages = folder.packages + pkg))
+                    }
                 }
+                AppGraph.repo.homeDao.delete(dragged.entry)
+                return@launch
             }
+
+            // Two apps: a new folder holding both, taking the target's place.
+            // It arrives called "Folder" and is renamed by tapping its title in
+            // the overlay, which is where you are looking the moment it opens.
+            val first = target.entry.packageName ?: return@launch
+            val second = dragged.entry.packageName ?: return@launch
+            if (first == second) return@launch
+            val newId = AppGraph.repo.folderDao.upsert(
+                Folder(
+                    name = "Folder",
+                    packages = listOf(first, second),
+                    sortOrder = byId.size
+                )
+            )
+            AppGraph.repo.homeDao.upsert(
+                target.entry.copy(packageName = null, folderId = newId)
+            )
             AppGraph.repo.homeDao.delete(dragged.entry)
+            openFolder = newId
+            folderTrail = listOf(newId)
         }
     }
 
@@ -270,18 +303,62 @@ private fun Home() {
     val pickerApps = remember(iconStyle) { AppList.all(context, withIcons = iconStyle) }
     // Icons are only loaded for the modes that draw them: decoding a hundred
     // launcher icons is not work a Sleep-mode home screen should ever do.
-    val icons = remember(iconStyle) {
-        if (!iconStyle) emptyMap()
-        else AppList.all(context, withIcons = true).associate { it.packageName to it.icon }
+    // The overlay draws icons even for a text mode's folders, so these load
+    // either way; AppIcon rasterises each one once and keeps it.
+    val icons = remember {
+        AppList.all(context, withIcons = true).associate { it.packageName to it.icon }
     }
 
+    val density = LocalDensity.current
+    fun fire(target: EdgeTarget?, edge: Edge) {
+        when (target) {
+            is EdgeTarget.App -> {
+                Stats.log(EventKind.APP_OPENED, target.packageName)
+                AppList.launch(context, target.packageName)
+            }
+            is EdgeTarget.Site -> { openSite = target; openSiteEdge = edge }
+            null -> Unit
+        }
+    }
+
+    // Two layers. The inner one carries the insets and the gutter and holds the
+    // home screen; the outer one is the whole display, so an overlay can cover
+    // it edge to edge rather than being boxed in by the gutter.
     Box(
         Modifier
             .fillMaxSize()
             .background(Brand.Launcher.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(horizontal = 28.dp)
+            .pointerInput(leftEdge, rightEdge, editing) {
+                if (editing) return@pointerInput
+                // Only a drag that begins within a thumb's width of an edge
+                // counts, so the gesture cannot be triggered by scrolling the
+                // list in the middle of the screen.
+                val edgeZone = with(density) { 32.dp.toPx() }
+                val travel = with(density) { 72.dp.toPx() }
+                var startX = 0f
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { offset -> startX = offset.x; total = 0f },
+                    onHorizontalDrag = { change, delta ->
+                        total += delta
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        val width = size.width.toFloat()
+                        when {
+                            startX <= edgeZone && total > travel -> fire(leftEdge, Edge.LEFT)
+                            startX >= width - edgeZone && total < -travel -> fire(rightEdge, Edge.RIGHT)
+                        }
+                    }
+                )
+            }
     ) {
+      Box(
+          Modifier
+              .fillMaxSize()
+              .windowInsetsPadding(WindowInsets.safeDrawing)
+              .padding(horizontal = 28.dp)
+      ) {
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(36.dp))
 
@@ -398,7 +475,11 @@ private fun Home() {
                         rows = rows,
                         icons = icons,
                         openFolder = openFolder,
-                        onToggleFolder = { id -> openFolder = if (openFolder == id) null else id },
+                        onToggleFolder = { rowId ->
+                            val f = rows.firstOrNull { it.entry.id == rowId }?.folder
+                            openFolder = f?.id
+                            folderTrail = listOfNotNull(f?.id)
+                        },
                         onEditHome = { editing = true },
                         onLaunch = { pkg ->
                             Stats.log(EventKind.APP_OPENED, pkg)
@@ -422,17 +503,17 @@ private fun Home() {
                     items(rows, key = { it.entry.id }) { row ->
                         HomeRowView(
                             row = row,
-                            expanded = openFolder == row.entry.id,
-                            foldersById = foldersById,
-                            trail = if (openFolder == row.entry.id) folderTrail else emptyList(),
-                            onToggle = {
-                                if (openFolder == row.entry.id) {
-                                    openFolder = null; folderTrail = emptyList()
+                            onOpen = {
+                                if (row.isFolder) {
+                                    openFolder = row.folder?.id
+                                    folderTrail = listOfNotNull(row.folder?.id)
                                 } else {
-                                    openFolder = row.entry.id; folderTrail = emptyList()
+                                    row.entry.packageName?.let { pkg ->
+                                        Stats.log(EventKind.APP_OPENED, pkg)
+                                        AppList.launch(context, pkg)
+                                    }
                                 }
                             },
-                            onOpenSub = { id -> folderTrail = folderTrail + id },
                             onLongPress = { editing = true }
                         )
                     }
@@ -467,6 +548,54 @@ private fun Home() {
                     }
                 )
             }
+
+      }
+
+        // Opened folders float over the home screen rather than unfolding in
+        // it, so nothing below shifts to make room and closing puts you back
+        // exactly where you were.
+        val openTrail = remember(folderTrail, foldersById) {
+            folderTrail.mapNotNull { foldersById[it]?.name }
+        }
+        EdgeWebPanel(
+            site = openSite,
+            edge = openSiteEdge,
+            onDismiss = { openSite = null },
+            onOpenInBrowser = { url ->
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                openSite = null
+            }
+        )
+
+        FolderOverlay(
+            visible = openFolder != null && !editing,
+            folder = folderTrail.lastOrNull()?.let { foldersById[it] },
+            trail = openTrail,
+            style = mode?.homeStyle ?: HomeStyle.TEXT,
+            foldersById = foldersById,
+            iconFor = { pkg -> icons[pkg] },
+            onOpenSub = { id -> folderTrail = folderTrail + id },
+            onLaunch = { pkg ->
+                Stats.log(EventKind.APP_OPENED, pkg)
+                AppList.launch(context, pkg)
+                openFolder = null
+                folderTrail = emptyList()
+            },
+            onRename = { folder, newName ->
+                AppGraph.scope.launch {
+                    AppGraph.repo.folderDao.upsert(folder.copy(name = newName))
+                }
+            },
+            onDismiss = {
+                if (folderTrail.size > 1) folderTrail = folderTrail.dropLast(1)
+                else { openFolder = null; folderTrail = emptyList() }
+            }
+        )
         }
     }
 }
@@ -701,119 +830,76 @@ private fun openSyncSettings(context: Context) {
     }
 }
 
+/**
+ * One row of the text home screen.
+ *
+ * Flat on purpose: a folder no longer unfolds in place, pushing everything
+ * below it down the screen. It opens over the top instead, so closing puts you
+ * back exactly where you were.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeRowView(
     row: HomeRow,
-    expanded: Boolean,
-    foldersById: Map<Long, Folder>,
-    trail: List<Long>,
-    onToggle: () -> Unit,
-    onOpenSub: (Long) -> Unit,
+    onOpen: () -> Unit,
     onLongPress: () -> Unit
 ) {
     val context = LocalContext.current
+    val colors = tileColors(PickerPalette.LAUNCHER)
 
     if (!row.isFolder) {
         val pkg = row.entry.packageName ?: return
         if (!AppList.isInstalled(context, pkg)) return
-        AppRow(AppList.label(context, pkg)) {
-            Stats.log(EventKind.APP_OPENED, pkg)
-            AppList.launch(context, pkg)
-        }
-        return
-    }
-
-    // Whichever folder the trail has arrived at, or this one.
-    val shown = remember(row.folder, trail, foldersById) {
-        trail.lastOrNull()?.let { foldersById[it] } ?: row.folder
-    }
-    val contents = remember(shown) {
-        shown?.packages.orEmpty().filter { AppList.isInstalled(context, it) }
-    }
-    val subFolders = remember(shown, foldersById) {
-        shown?.subFolders.orEmpty().mapNotNull { foldersById[it] }
-    }
-    if (contents.isEmpty() && subFolders.isEmpty()) return
-
-    Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = onToggle, onLongClick = onLongPress)
+                .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
                 .padding(vertical = 11.dp)
         ) {
             Text(
-                row.name,
-                fontSize = 22.sp,
-                color = if (expanded) InkBright else Ink
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                if (expanded) "−" else "${contents.size}",
-                fontSize = 13.sp,
-                color = InkFaint
+                AppList.label(context, pkg),
+                fontSize = 21.sp,
+                fontFamily = Brand.sans,
+                color = colors.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        AnimatedVisibility(visible = expanded) {
-            Column(Modifier.padding(start = 18.dp, bottom = 8.dp)) {
-                if (trail.isNotEmpty()) {
-                    Text(
-                        (listOf(row.name) + trail.mapNotNull { foldersById[it]?.name })
-                            .joinToString("  >  "),
-                        fontSize = 12.sp,
-                        color = InkFaint,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-                }
-                subFolders.forEach { sub ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenSub(sub.id) }
-                            .padding(vertical = 9.dp)
-                    ) {
-                        Text(sub.name, fontSize = 19.sp, color = Ink)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "${sub.packages.size + sub.subFolders.size}",
-                            fontSize = 12.sp,
-                            color = InkFaint
-                        )
-                    }
-                }
-                contents.forEach { pkg ->
-                    Text(
-                        AppList.label(context, pkg),
-                        fontSize = 19.sp,
-                        color = InkDim,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                Stats.log(EventKind.APP_OPENED, pkg)
-                                AppList.launch(context, pkg)
-                            }
-                            .padding(vertical = 9.dp)
-                    )
-                }
-            }
-        }
+        return
+    }
+
+    val contents = remember(row.packages) { row.packages.filter { AppList.isInstalled(context, it) } }
+    val subCount = row.folder?.subFolders?.size ?: 0
+    if (contents.isEmpty() && subCount == 0) return
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
+            .padding(vertical = 11.dp)
+    ) {
+        Text(
+            row.name,
+            fontSize = 21.sp,
+            fontFamily = Brand.sans,
+            color = colors.ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.width(10.dp))
+        Text("${contents.size + subCount}", fontSize = 12.sp, color = colors.faint)
     }
 }
 
 /**
- * The calendar's own colour, as Google Calendar draws it.
- *
- * Falls back to the muted grey when a calendar has no colour set, which is
- * better than a black dot on a black screen.
+ * The calendar's own colour, as Google Calendar draws it. Falls back to the
+ * muted grey rather than drawing black on black.
  */
 @Composable
 private fun EventDot(argb: Int, size: androidx.compose.ui.unit.Dp) {
-    val colour = remember(argb) {
-        if (argb == 0) InkFaint else Color(argb).copy(alpha = 1f)
-    }
+    val colour = remember(argb) { if (argb == 0) InkFaint else Color(argb).copy(alpha = 1f) }
     Box(Modifier.size(size).clip(CircleShape).background(colour))
 }
 

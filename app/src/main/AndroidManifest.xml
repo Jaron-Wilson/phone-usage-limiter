@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Only for the web panels you put on a screen edge. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Only ever used to switch a calendar's own sync on or off, never to
          create, change or delete an event. -->
@@ -120,6 +124,35 @@
         <receiver
             android:name=".schedule.ModeAlarmReceiver"
             android:exported="false" />
+
+        <!-- The screensaver: the nearest thing to an always-on display that an
+             app is allowed to provide. -->
+        <service
+            android:name=".dream.ModesDream"
+            android:exported="true"
+            android:label="@string/dream_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.dream"
+                android:resource="@xml/dream_info" />
+        </service>
+
+        <!-- Presents one link as an NFC tag when another phone taps this one. -->
+        <service
+            android:name=".nfc.TapCardService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
 
         <receiver
             android:name=".commute.LeaveReceiver"

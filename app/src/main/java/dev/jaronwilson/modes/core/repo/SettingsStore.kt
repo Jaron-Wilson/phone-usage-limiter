@@ -10,6 +10,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.jaronwilson.modes.commute.Destination
 import dev.jaronwilson.modes.commute.Destinations
+import dev.jaronwilson.modes.launcher.Edge
+import dev.jaronwilson.modes.launcher.EdgePanels
+import dev.jaronwilson.modes.launcher.EdgeTarget
 import dev.jaronwilson.modes.core.Defaults
 import dev.jaronwilson.modes.core.model.ModeSource
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +45,9 @@ class SettingsStore(private val context: Context) {
         val DEFAULT_TRAVEL = longPreferencesKey("default_travel_minutes")
         val COMMUTE_ENABLED = booleanPreferencesKey("commute_enabled")
         val DESTINATIONS = stringPreferencesKey("destinations")
+        val EDGE_LEFT = stringPreferencesKey("edge_left")
+        val EDGE_RIGHT = stringPreferencesKey("edge_right")
+        val TAP_CARD_URL = stringPreferencesKey("tap_card_url")
         val CALENDAR_PRIORITY = stringPreferencesKey("calendar_priority")
     }
 
@@ -146,6 +152,23 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setCalendarPriority(ids: List<Long>) =
         edit { it[K.CALENDAR_PRIORITY] = ids.joinToString(",") }
+
+    /** What a swipe in from each side of the home screen does. */
+    val leftEdge: Flow<EdgeTarget?> = context.dataStore.data.map {
+        EdgePanels.decode(it[K.EDGE_LEFT].orEmpty())
+    }
+    val rightEdge: Flow<EdgeTarget?> = context.dataStore.data.map {
+        EdgePanels.decode(it[K.EDGE_RIGHT].orEmpty())
+    }
+
+    suspend fun setEdge(edge: Edge, target: EdgeTarget?) = edit {
+        val key = if (edge == Edge.LEFT) K.EDGE_LEFT else K.EDGE_RIGHT
+        it[key] = EdgePanels.encode(target)
+    }
+
+    /** The link another phone reads when it taps yours. */
+    val tapCardUrl: Flow<String> = context.dataStore.data.map { it[K.TAP_CARD_URL].orEmpty() }
+    suspend fun setTapCardUrl(v: String) = edit { it[K.TAP_CARD_URL] = v }
 
     /** Places worth one tap from the home screen. */
     val destinations: Flow<List<Destination>> = context.dataStore.data.map {

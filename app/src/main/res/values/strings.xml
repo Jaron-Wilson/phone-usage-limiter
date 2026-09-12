@@ -4,4 +4,6 @@
     <string name="gate_name">Modes notification gate</string>
     <string name="guard_name">Modes app guard</string>
     <string name="guard_description">Lets Modes see which app is in the foreground so it can hold you to the current mode. It does not read screen content.</string>
+    <string name="tap_card_name">Modes tap card</string>
+    <string name="dream_name">Modes</string>
 </resources>

@@ -49,7 +49,13 @@ import dev.jaronwilson.modes.ui.AppIcon
 import dev.jaronwilson.modes.ui.AppPicker
 import dev.jaronwilson.modes.ui.PickerPalette
 import dev.jaronwilson.modes.core.model.HomeStyle
+import dev.jaronwilson.modes.launcher.Edge
+import dev.jaronwilson.modes.launcher.EdgePanels
+import dev.jaronwilson.modes.launcher.EdgeTarget
+import dev.jaronwilson.modes.ui.GhostButton
 import dev.jaronwilson.modes.ui.Panel
+import dev.jaronwilson.modes.ui.PrimaryButton
+import dev.jaronwilson.modes.ui.Prose
 import dev.jaronwilson.modes.ui.SwitchRow
 import dev.jaronwilson.modes.ui.RowItem
 import dev.jaronwilson.modes.ui.ScreenScaffold
@@ -155,6 +161,150 @@ fun RulesScreen() {
                         scope.launch {
                             AppGraph.repo.settings.setAlwaysAllowed(
                                 if (on) allowed - app.packageName else allowed + app.packageName
+                            )
+                        }
+                    }
+                )
+            }
+
+            SectionHeader("Screen edges")
+            Panel {
+                Prose(
+                    "Swipe in from the very edge of the home screen. An app is " +
+                        "launched; a site opens in a panel over the home screen, so " +
+                        "checking one number does not mean leaving a browser tab open."
+                )
+                Edge.entries.forEach { edge ->
+                    val target by (if (edge == Edge.LEFT) AppGraph.repo.settings.leftEdge
+                    else AppGraph.repo.settings.rightEdge).collectAsState(initial = null)
+                    var draft by remember(target) {
+                        mutableStateOf(
+                            when (val t = target) {
+                                is EdgeTarget.Site -> t.url
+                                else -> ""
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        if (edge == Edge.LEFT) "SWIPE IN FROM THE LEFT" else "SWIPE IN FROM THE RIGHT",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        when (val t = target) {
+                            is EdgeTarget.App -> AppList.label(context, t.packageName)
+                            is EdgeTarget.Site -> t.title + "  " + t.url
+                            null -> "Nothing yet"
+                        },
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        label = { Text("A site, e.g. finance.jaronwilson.dev") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PrimaryButton(
+                            text = "Use this site",
+                            enabled = draft.isNotBlank(),
+                            onClick = {
+                                scope.launch {
+                                    AppGraph.repo.settings.setEdge(
+                                        edge,
+                                        EdgeTarget.Site(
+                                            EdgePanels.normalise(draft),
+                                            EdgePanels.hostOf(draft)
+                                        )
+                                    )
+                                }
+                            }
+                        )
+                        GhostButton(
+                            text = "Clear",
+                            onClick = { scope.launch { AppGraph.repo.settings.setEdge(edge, null) } }
+                        )
+                    }
+                    var appQ by remember { mutableStateOf("") }
+                    AppPicker(
+                        apps = remember { AppList.all(context, withIcons = true) },
+                        style = HomeStyle.ICONS,
+                        query = appQ,
+                        onQueryChange = { appQ = it },
+                        selected = setOfNotNull((target as? EdgeTarget.App)?.packageName),
+                        palette = PickerPalette.APP,
+                        limit = 12,
+                        placeholder = "or pick an app",
+                        onPick = { app ->
+                            scope.launch {
+                                AppGraph.repo.settings.setEdge(edge, EdgeTarget.App(app.packageName))
+                            }
+                        }
+                    )
+                }
+            }
+
+            SectionHeader("Tap to share")
+            Panel {
+                Prose(
+                    "Makes the phone read like an NFC tag holding one link. Tap it to " +
+                        "another phone and it sees your portfolio, with nothing to " +
+                        "install at the other end. Read only: nobody can write to your " +
+                        "phone by touching it."
+                )
+                val tapUrl by AppGraph.repo.settings.tapCardUrl.collectAsState(initial = "")
+                var tapDraft by remember(tapUrl) { mutableStateOf(tapUrl) }
+                OutlinedTextField(
+                    value = tapDraft,
+                    onValueChange = { tapDraft = it },
+                    label = { Text("jaronwilson.org, or a LinkedIn URL") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                PrimaryButton(
+                    text = "Save",
+                    enabled = tapDraft.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        scope.launch {
+                            AppGraph.repo.settings.setTapCardUrl(EdgePanels.normalise(tapDraft))
+                        }
+                    }
+                )
+                Prose(
+                    "Android removed Beam, so a tap cannot push a link by itself any " +
+                        "more. Pretending to be a tag is what still works, and works " +
+                        "with readers too."
+                )
+                GhostButton(
+                    text = "NFC settings",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NFC_SETTINGS))
+                        }
+                    }
+                )
+            }
+
+            SectionHeader("Always on")
+            Panel {
+                Prose(
+                    "No app can replace Android's always-on display: that belongs to " +
+                        "the system and there is no API for it. The screensaver slot is " +
+                        "the nearest thing an app is allowed to fill, and it runs for as " +
+                        "long as the phone is charging or docked."
+                )
+                Prose("Modes puts the time, the mode and what is next on a black screen, dimmed.")
+                GhostButton(
+                    text = "Choose the screen saver",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent("android.settings.DREAM_SETTINGS")
                             )
                         }
                     }
