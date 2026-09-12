@@ -219,6 +219,7 @@ private fun Home() {
     // Refreshed on its own clock: the calendar changes far less often than the
     // minute does, and querying the provider is not free.
     val places by AppGraph.repo.settings.destinations.collectAsState(initial = emptyList())
+    val drawerFolderIds by AppGraph.repo.settings.drawerFolders.collectAsState(initial = emptyList())
     val leftEdge by AppGraph.repo.settings.leftEdge.collectAsState(initial = null)
     val rightEdge by AppGraph.repo.settings.rightEdge.collectAsState(initial = null)
     val calendarPriority by AppGraph.repo.settings.calendarPriority
@@ -323,6 +324,46 @@ private fun Home() {
         }
     }
 
+    /**
+     * Dropping one drawer tile on another.
+     *
+     * Two apps become a folder; an app on a folder joins it. Either way the
+     * folder goes into the same shared library the home screen draws from, so
+     * something grouped while rummaging can be switched on for a mode without
+     * being built twice.
+     */
+    fun mergeInDrawer(dragged: DrawerItem, target: DrawerItem) {
+        AppGraph.scope.launch {
+            val draggedPkg = (dragged as? DrawerItem.App)?.entry?.packageName ?: return@launch
+            when (target) {
+                is DrawerItem.Group -> {
+                    val folder = target.folder
+                    if (draggedPkg in folder.packages) return@launch
+                    AppGraph.repo.folderDao.upsert(
+                        folder.copy(packages = folder.packages + draggedPkg)
+                    )
+                }
+                is DrawerItem.App -> {
+                    val targetPkg = target.entry.packageName
+                    if (targetPkg == draggedPkg) return@launch
+                    val existing = AppGraph.repo.folderDao.getAll()
+                    val newId = AppGraph.repo.folderDao.upsert(
+                        dev.jaronwilson.modes.core.model.Folder(
+                            name = "Folder",
+                            packages = listOf(targetPkg, draggedPkg),
+                            sortOrder = existing.size
+                        )
+                    )
+                    AppGraph.repo.settings.setDrawerFolders(drawerFolderIds + newId)
+                    // Open it straight away: a folder called "Folder" wants a
+                    // name, and this is where you are already looking.
+                    openFolder = newId
+                    folderTrail = listOf(newId)
+                }
+            }
+        }
+    }
+
     fun removeRow(row: HomeRow) {
         // Takes the row off this mode only. The folder itself, and every other
         // mode using it, are left alone.
@@ -375,9 +416,13 @@ private fun Home() {
                         pass = PointerEventPass.Initial
                     )
                     val width = size.width.toFloat()
+                    val height = size.height.toFloat()
                     val fromLeft = down.position.x <= edgeZone
                     val fromRight = down.position.x >= width - edgeZone
-                    if (!fromLeft && !fromRight) return@awaitEachGesture
+                    // The bottom strip is the only place a swipe up is read as
+                    // one, so dragging the app grid still scrolls it.
+                    val fromBottom = down.position.y >= height - with(density) { 140.dp.toPx() }
+                    if (!fromLeft && !fromRight && !fromBottom) return@awaitEachGesture
 
                     var dx = 0f
                     var dy = 0f
@@ -394,6 +439,12 @@ private fun Home() {
                                 fromLeft && dx > 0 -> { fire(leftEdge, Edge.LEFT); fired = true }
                                 fromRight && dx < 0 -> { fire(rightEdge, Edge.RIGHT); fired = true }
                             }
+                        }
+                        // Up from the bottom: every app, with folders.
+                        if (!fired && fromBottom && -dy > travel && abs(dy) > abs(dx) * 1.5f) {
+                            showAll = true
+                            query = ""
+                            fired = true
                         }
                         // Only once it is ours, so an ordinary scroll that
                         // happens to begin near an edge still scrolls.
@@ -580,22 +631,7 @@ private fun Home() {
                         )
                     }
                 }
-            } else {
-                AppPicker(
-                    apps = pickerApps,
-                    style = mode?.homeStyle ?: HomeStyle.TEXT,
-                    query = query,
-                    onQueryChange = { query = it },
-                    palette = PickerPalette.LAUNCHER,
-                    limit = 60,
-                    emptyText = "Nothing by that name",
-                    onPick = { app ->
-                        Stats.log(EventKind.APP_OPENED, app.packageName)
-                        AppList.launch(context, app.packageName)
-                        showAll = false
-                        query = ""
-                    }
-                )
+            }
             }
 
       }
@@ -606,6 +642,29 @@ private fun Home() {
         val openTrail = remember(folderTrail, foldersById) {
             folderTrail.mapNotNull { foldersById[it]?.name }
         }
+        val drawerFolders = remember(folders, drawerFolderIds) {
+            drawerFolderIds.mapNotNull { id -> folders.firstOrNull { it.id == id } }
+        }
+        AppDrawer(
+            visible = showAll && !editing,
+            apps = pickerApps,
+            folders = drawerFolders,
+            query = query,
+            onQueryChange = { query = it },
+            onLaunch = { pkg ->
+                Stats.log(EventKind.APP_OPENED, pkg)
+                AppList.launch(context, pkg)
+                showAll = false
+                query = ""
+            },
+            onOpenFolder = { folder ->
+                openFolder = folder.id
+                folderTrail = listOf(folder.id)
+            },
+            onMerge = { dragged, target -> mergeInDrawer(dragged, target) },
+            onDismiss = { showAll = false; query = "" }
+        )
+
         EdgeWebPanel(
             site = openSite,
             edge = openSiteEdge,
@@ -646,7 +705,6 @@ private fun Home() {
                 else { openFolder = null; folderTrail = emptyList() }
             }
         )
-        }
     }
 }
 

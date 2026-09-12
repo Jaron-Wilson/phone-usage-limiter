@@ -49,6 +49,7 @@ class SettingsStore(private val context: Context) {
         val EDGE_LEFT = stringPreferencesKey("edge_left")
         val EDGE_RIGHT = stringPreferencesKey("edge_right")
         val TAP_CARD_URL = stringPreferencesKey("tap_card_url")
+        val DRAWER_FOLDERS = stringPreferencesKey("drawer_folders")
         val CALENDAR_PRIORITY = stringPreferencesKey("calendar_priority")
     }
 
@@ -174,6 +175,20 @@ class SettingsStore(private val context: Context) {
         it[K.TAP_CARD_URL] ?: DEFAULT_TAP_CARD
     }
     suspend fun setTapCardUrl(v: String) = edit { it[K.TAP_CARD_URL] = v }
+
+    /**
+     * Folders shown at the top of the app drawer, in order.
+     *
+     * They come from the same library the home screen uses, so a folder made
+     * while rummaging through every app is a folder you can then switch on for
+     * a mode. Apps inside one are not listed again below it.
+     */
+    val drawerFolders: Flow<List<Long>> = context.dataStore.data.map { p ->
+        p[K.DRAWER_FOLDERS].orEmpty().split(",").mapNotNull { it.trim().toLongOrNull() }
+    }
+
+    suspend fun setDrawerFolders(ids: List<Long>) =
+        edit { it[K.DRAWER_FOLDERS] = ids.joinToString(",") }
 
     /** Places worth one tap from the home screen. */
     val destinations: Flow<List<Destination>> = context.dataStore.data.map {

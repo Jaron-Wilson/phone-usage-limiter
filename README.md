@@ -473,6 +473,34 @@ plain: no file or content access, no geolocation, and any link leaving the site
 you configured is handed to the real browser rather than followed inside a
 launcher. Anything typed without a scheme gets `https`, never `http`.
 
+## Every app, one swipe up
+
+Swipe up from the bottom of the home screen and the whole app list slides in.
+The home screen stays what it is, a short list of what this mode is for, and
+the drawer is where everything else lives, so nothing has to be deleted from
+the phone to be kept off the home screen.
+
+**You can make folders in it.** Hold any tile, drag it onto another, wait for
+the border to light up, and drop. The two become a folder, which opens for
+renaming straight away. The Pixel launcher does not let you do this, Samsung's
+does, and there is no reason a drawer of two hundred apps should be a flat
+alphabetical wall.
+
+Folders sort to the top, loose apps follow alphabetically, and an app inside a
+folder leaves the loose list so it is never in two places at once. Search is
+the exception: typing looks through foldered apps as well, because someone
+searching for a name wants the app, not a lesson in where they filed it.
+
+Drop targets are found from the grid's own list of visible tiles rather than
+from a guess at row and column arithmetic, so a half scrolled grid still hits
+the tile actually under your thumb. The four hundred millisecond pause before a
+merge commits is deliberate: dragging across a dense grid passes over a lot of
+tiles that were never the destination.
+
+The drawer opens in its own full-bleed window, the same treatment described
+above, and the upward swipe is watched on the pointer's initial pass so the
+grid's own scrolling never eats it.
+
 ## Tap to share
 
 **Rules > Tap to share** puts one link on the phone's NFC radio. It starts set
@@ -741,6 +769,7 @@ launcher/LauncherActivity the minimal home screen, agenda and folders
 launcher/EditHome         dragging, adding and removing, in place
 launcher/FolderOverlay    a folder, opened over the home screen
 launcher/EdgeOverlay      a site, opened from a screen edge
+launcher/AppDrawer        every app, swiped up, with folders in it
 nfc/NdefPayload           the bytes a reader sees, as arithmetic
 dream/ModesDream          the screensaver
 tools/AppListExport       builds the dump, shared by the app and the script
