@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,6 +58,10 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -139,6 +144,26 @@ private fun Home() {
     var folderTrail by remember { mutableStateOf<List<Long>>(emptyList()) }
     var editing by remember { mutableStateOf(false) }
     var openSite by remember { mutableStateOf<EdgeTarget.Site?>(null) }
+    // Outlives the panel, so a dashboard checked several times an hour stays
+    // where it was rather than reloading on every swipe.
+    val webHost = remember { WebPanelHost() }
+    DisposableEffect(Unit) { onDispose { webHost.release() } }
+
+    // While a site is up it gets the whole display: status bar and navigation
+    // buttons both step out of the way, and a swipe from either edge brings
+    // them back temporarily without closing anything.
+    val view = LocalView.current
+    LaunchedEffect(openSite) {
+        val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+        val bars = WindowCompat.getInsetsController(window, view)
+        if (openSite != null) {
+            bars.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            bars.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
     var openSiteEdge by remember { mutableStateOf(Edge.LEFT) }
     var picking by remember { mutableStateOf<Picking?>(null) }
 
@@ -584,6 +609,7 @@ private fun Home() {
         EdgeWebPanel(
             site = openSite,
             edge = openSiteEdge,
+            host = webHost,
             onDismiss = { openSite = null },
             onOpenInBrowser = { url ->
                 runCatching {

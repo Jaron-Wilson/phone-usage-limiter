@@ -17,15 +17,14 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +39,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.jaronwilson.modes.ui.FullBleedDialogWindow
 import dev.jaronwilson.modes.ui.theme.Brand
 
 /**
@@ -60,33 +62,41 @@ import dev.jaronwilson.modes.ui.theme.Brand
 fun EdgeWebPanel(
     site: EdgeTarget.Site?,
     edge: Edge,
+    host: WebPanelHost,
     onDismiss: () -> Unit,
     onOpenInBrowser: (String) -> Unit
 ) {
     val context = LocalContext.current
-    var webView by remember(site) { mutableStateOf<WebView?>(null) }
 
     // Back goes back through the site's own history first, and only leaves
     // once there is nowhere left to go.
     BackHandler(enabled = site != null) {
-        val view = webView
-        if (view != null && view.canGoBack()) view.goBack() else onDismiss()
+        if (!host.goBack()) onDismiss()
     }
 
-    AnimatedVisibility(
-        visible = site != null,
-        enter = fadeIn(tween(120)),
-        exit = fadeOut(tween(120))
+    if (site == null) return
+
+    // Its own window. A composable drawn inside the home screen inherits the
+    // home screen's gutter and insets, which is how this ended up with a black
+    // border on every side however many times the padding was moved. A popup
+    // is measured against the display instead, so full screen means it.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+            dismissOnBackPress = false
+        )
     ) {
+        FullBleedDialogWindow()
         Box(Modifier.fillMaxSize().background(Brand.Dark.paper)) {
             AnimatedVisibility(
-                visible = site != null,
-                enter = slideInHorizontally(tween(220)) { w -> if (edge == Edge.LEFT) -w else w },
-                exit = slideOutHorizontally(tween(160)) { w -> if (edge == Edge.LEFT) -w else w }
+                visible = true,
+                enter = slideInHorizontally(tween(220)) { w -> if (edge == Edge.LEFT) -w else w }
             ) {
-                val s = site ?: return@AnimatedVisibility
+                val s = site
 
-                Column(
+                Box(
                     Modifier
                         .fillMaxSize()
                         .background(Brand.Dark.paper)
@@ -106,78 +116,21 @@ fun EdgeWebPanel(
                                 }
                             )
                         }
-                        .windowInsetsPadding(WindowInsets.safeDrawing)
                 ) {
+                    // Edge to edge, under the status bar and behind the
+                    // navigation bar. The page gets the glass, all of it.
                     AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                // Nothing local is reachable from a page an
-                                // edge panel loaded.
-                                settings.allowFileAccess = false
-                                settings.allowContentAccess = false
-                                settings.setGeolocationEnabled(false)
-                                settings.builtInZoomControls = false
-                                webViewClient = object : WebViewClient() {
-                                    override fun shouldOverrideUrlLoading(
-                                        view: WebView?,
-                                        request: WebResourceRequest?
-                                    ): Boolean {
-                                        val target = request?.url?.toString() ?: return false
-                                        val sameSite = runCatching {
-                                            android.net.Uri.parse(target).host ==
-                                                android.net.Uri.parse(s.url).host
-                                        }.getOrDefault(false)
-                                        if (sameSite) return false
-                                        // Anywhere else is the browser's job.
-                                        onOpenInBrowser(target)
-                                        return true
-                                    }
-                                }
-                                loadUrl(s.url)
-                                webView = this
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        // The same view every time, so the page is where you
+                        // left it rather than loading again.
+                        factory = { ctx -> host.viewFor(ctx, s.url, onOpenInBrowser) },
+                        modifier = Modifier.fillMaxSize()
                     )
 
-                    // The only chrome, at the bottom, where the thumb is.
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(46.dp)
-                            .background(Brand.Dark.surface)
-                            .padding(horizontal = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            s.title,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Brand.Dark.muted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            "browser",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Brand.Dark.accent,
-                            modifier = Modifier
-                                .clickable { onOpenInBrowser(s.url) }
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                        )
-                        Text(
-                            "close",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Brand.Dark.muted,
-                            modifier = Modifier
-                                .clickable(onClick = onDismiss)
-                                .padding(start = 10.dp, top = 8.dp, bottom = 8.dp)
-                        )
-                    }
+                    // No chrome at all. Anything floated over the page sits
+                    // on whatever the site put underneath it, and a site's own
+                    // controls have a better claim to that corner than a close
+                    // button does. Back closes it, or shove it back towards the
+                    // edge it came from.
                 }
             }
         }

@@ -51,6 +51,9 @@ import dev.jaronwilson.modes.ui.AppTileIcon
 import dev.jaronwilson.modes.ui.FolderGlyph
 import dev.jaronwilson.modes.ui.PickerPalette
 import dev.jaronwilson.modes.ui.tileColors
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.jaronwilson.modes.ui.FullBleedDialogWindow
 import dev.jaronwilson.modes.ui.theme.Brand
 
 /**
@@ -81,11 +84,19 @@ fun FolderOverlay(
     val context = LocalContext.current
     val colors = tileColors(PickerPalette.LAUNCHER)
 
-    AnimatedVisibility(
-        visible = visible && folder != null,
-        enter = fadeIn(tween(160)),
-        exit = fadeOut(tween(120))
+    if (!visible || folder == null) return
+
+    // Its own window, for the same reason as the web panel: anything drawn
+    // inside the home screen inherits the home screen's gutter.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+            dismissOnBackPress = false
+        )
     ) {
+        FullBleedDialogWindow()
         // The fog. Light rather than dark, so the screen behind reads as
         // stepped back rather than switched off.
         Box(
@@ -100,11 +111,10 @@ fun FolderOverlay(
             contentAlignment = Alignment.Center
         ) {
             AnimatedVisibility(
-                visible = visible && folder != null,
-                enter = scaleIn(tween(180), initialScale = 0.92f) + fadeIn(tween(180)),
-                exit = scaleOut(tween(120), targetScale = 0.95f) + fadeOut(tween(120))
+                visible = true,
+                enter = scaleIn(tween(180), initialScale = 0.92f) + fadeIn(tween(180))
             ) {
-                val f = folder ?: return@AnimatedVisibility
+                val f = folder
                 val apps = remember(f.packages) { f.packages.filter { AppList.isOpenable(context, it) } }
                 val subs = remember(f.subFolders, foldersById) { f.subFolders.mapNotNull { foldersById[it] } }
 

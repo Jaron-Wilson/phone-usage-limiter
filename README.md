@@ -441,16 +441,26 @@ opens Calendar, the right opens your bank.
 
 - **an app** is launched, because a shortcut that opened a launcher panel
   first would be slower than the icon it replaced
-- **a site** slides in from that edge and then takes the whole screen. The
-  point of putting a dashboard on an edge is to read it, and going through the
-  browser to do that leaves a tab you then have to close
+- **a site** slides in from that edge and takes the entire display: no status
+  bar, no navigation buttons, no chrome of ours. The point of putting a
+  dashboard on an edge is to read it, and going through the browser to do that
+  leaves a tab you then have to close
 
-Its only chrome is a thin strip along the bottom carrying the host, a way into
-the real browser, and close. Two earlier versions floated it as a card, first
-with its own title bar above the site's own heading and then held against one
-side, and both read as a browser window that had been made small. Shove it back
-towards its edge to dismiss it, or press back, which walks the site's own
-history first and only then closes.
+Press back to close it, which walks the site's own history first, or shove it
+back towards the edge it came from. There is deliberately no close button
+floating over the page: whatever a site puts in its own bottom corner has a
+better claim to that corner than we do.
+
+Getting a genuinely full-screen overlay took four goes, and the notes are worth
+keeping. A composable drawn inside the home screen inherits the home screen's
+gutter and insets, so it is drawn in its own window. `decorFitsSystemWindows =
+false` is documented as enough for edge to edge and is not: the window is still
+positioned below the status bar. `FLAG_LAYOUT_NO_LIMITS` gets past the bars and
+leaves the camera cutout. `LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS` gets the last
+sixty pixels. See `ui/FullBleed.kt`.
+
+The page is also kept alive between openings, so a dashboard checked several
+times an hour is where you left it rather than loading from the top.
 
 Only a drag starting within a thumb's width of the edge counts, so scrolling
 the middle of the screen never triggers it, and the gesture is watched on the
