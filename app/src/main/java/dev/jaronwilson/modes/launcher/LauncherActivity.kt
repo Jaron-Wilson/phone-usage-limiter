@@ -912,8 +912,6 @@ private fun HomeRowView(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.width(10.dp))
-        Text("${contents.size + subCount}", fontSize = 12.sp, color = colors.faint)
     }
 }
 

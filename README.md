@@ -119,9 +119,9 @@ TOMORROW
 Phone
 Messages
 Calendar
-Work        5
-Everyday    3
-Money       9
+Work
+Everyday
+Money
 
 everything else
 ```
@@ -154,6 +154,10 @@ the same job and cannot.
 The next alarm is the system's own, the same one in the status bar, so it
 includes timers other apps set. It turns gold within the hour, and tapping
 opens whichever app owns it.
+
+A folder on the home screen is a name, nothing else. How many things are
+inside is not a question anyone asks of their own phone, and a number beside
+every row is six numbers to read past on the way to the one word you wanted.
 
 Tap a folder and it comes forward over the home screen, the way One UI does
 it, with the screen behind it darkened. Nothing underneath moves to make room,

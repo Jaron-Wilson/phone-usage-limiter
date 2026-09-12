@@ -166,14 +166,7 @@ fun FolderOverlay(
                                 AppRowName(
                                     label = sub.name,
                                     colors = colors,
-                                    onClick = { onOpenSub(sub.id) },
-                                    trailing = {
-                                        Text(
-                                            "${sub.packages.size + sub.subFolders.size}",
-                                            fontSize = 12.sp,
-                                            color = colors.faint
-                                        )
-                                    }
+                                    onClick = { onOpenSub(sub.id) }
                                 )
                             }
                         }

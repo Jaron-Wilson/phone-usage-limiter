@@ -77,7 +77,6 @@ fun IconHome(
                 FolderTile(
                     name = row.name,
                     icons = installed.take(4).map { icons[it] },
-                    count = installed.size,
                     onClick = { onToggleFolder(row.entry.id) },
                     onLongClick = onEditHome
                 )
@@ -131,7 +130,6 @@ private fun AppTile(
 private fun FolderTile(
     name: String,
     icons: List<Drawable?>,
-    count: Int,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -143,7 +141,7 @@ private fun FolderTile(
         FolderGlyph(icons, 52.dp, colors)
         Spacer(Modifier.height(6.dp))
         Text(
-            "$name  $count",
+            name,
             fontSize = 11.5.sp,
             fontFamily = Brand.sans,
             color = colors.muted,
