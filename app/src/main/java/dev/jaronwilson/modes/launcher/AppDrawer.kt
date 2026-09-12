@@ -1,5 +1,6 @@
 package dev.jaronwilson.modes.launcher
 
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -81,11 +82,13 @@ fun AppDrawer(
     visible: Boolean,
     apps: List<AppEntry>,
     folders: List<Folder>,
+    iconFor: (String) -> Drawable?,
     query: String,
     onQueryChange: (String) -> Unit,
     onLaunch: (String) -> Unit,
     onOpenFolder: (Folder) -> Unit,
     onMerge: (dragged: DrawerItem, target: DrawerItem) -> Unit,
+    onAddToHome: (DrawerItem) -> Unit,
     onDismiss: () -> Unit
 ) {
     if (!visible) return
@@ -127,13 +130,6 @@ fun AppDrawer(
                     Spacer(Modifier.height(18.dp))
                     SearchBar(query, onQueryChange, colors)
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "hold and drop one on another to make a folder",
-                        fontSize = 11.5.sp,
-                        fontFamily = Brand.sans,
-                        color = colors.faint,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
 
                     val gridState = rememberLazyGridState()
                     var dragFrom by remember { mutableIntStateOf(-1) }
@@ -144,6 +140,41 @@ fun AppDrawer(
                     var dragDx by remember { mutableFloatStateOf(0f) }
                     var dragDy by remember { mutableFloatStateOf(0f) }
 
+                    // Dragging past the top of the grid means the home screen.
+                    // The hint line is already sitting there saying nothing
+                    // useful mid-drag, so it becomes the place to drop.
+                    val dragging = dragFrom >= 0
+                    val overHome = dragging && pointer.y < -12f
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                            .then(
+                                if (dragging) Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (overHome) colors.accent.copy(alpha = 0.20f)
+                                        else colors.surface
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (overHome) colors.accent else colors.surface,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(vertical = 10.dp)
+                                else Modifier.padding(vertical = 2.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (dragging) "drag up here to put it on the home screen"
+                            else "hold and drop one on another to make a folder",
+                            fontSize = 11.5.sp,
+                            fontFamily = Brand.sans,
+                            color = if (overHome) colors.accent else colors.faint
+                        )
+                    }
+
                     fun indexUnder(point: Offset): Int = gridState.layoutInfo.visibleItemsInfo
                         .firstOrNull { info ->
                             point.x >= info.offset.x && point.x <= info.offset.x + info.size.width &&
@@ -151,7 +182,10 @@ fun AppDrawer(
                         }?.index ?: -1
 
                     fun endDrag() {
-                        if (mergeTarget >= 0 && dragFrom >= 0 &&
+                        val toHome = dragFrom >= 0 && pointer.y < -12f
+                        if (toHome && dragFrom in items.indices) {
+                            onAddToHome(items[dragFrom])
+                        } else if (mergeTarget >= 0 && dragFrom >= 0 &&
                             dragFrom in items.indices && mergeTarget in items.indices
                         ) {
                             onMerge(items[dragFrom], items[mergeTarget])
@@ -164,7 +198,7 @@ fun AppDrawer(
                         state = gridState,
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = PaddingValues(bottom = 32.dp),
+                        contentPadding = PaddingValues(bottom = 96.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -184,7 +218,9 @@ fun AppDrawer(
                                         dragDx += delta.x
                                         dragDy += delta.y
                                         val over = indexUnder(pointer)
-                                        if (over != dragFrom && over >= 0) {
+                                        if (pointer.y < -12f) {
+                                            hover = -1; mergeTarget = -1
+                                        } else if (over != dragFrom && over >= 0) {
                                             val now = System.currentTimeMillis()
                                             if (hover != over) {
                                                 hover = over; hoverSince = now; mergeTarget = -1
@@ -224,7 +260,7 @@ fun AppDrawer(
                                 when (item) {
                                     is DrawerItem.App -> AppTileIcon(
                                         label = item.entry.label,
-                                        icon = item.entry.icon,
+                                        icon = item.entry.icon ?: iconFor(item.entry.packageName),
                                         colors = colors,
                                         onClick = { onLaunch(item.entry.packageName) }
                                     )
@@ -237,6 +273,7 @@ fun AppDrawer(
                                         FolderGlyph(
                                             item.folder.packages.take(4).map { pkg ->
                                                 apps.firstOrNull { it.packageName == pkg }?.icon
+                                                    ?: iconFor(pkg)
                                             },
                                             52.dp,
                                             colors

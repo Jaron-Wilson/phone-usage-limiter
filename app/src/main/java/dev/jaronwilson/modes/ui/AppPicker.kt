@@ -4,6 +4,8 @@ import android.graphics.drawable.Drawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,7 +102,10 @@ fun AppPicker(
     limit: Int = 40,
     placeholder: String = "type a name",
     emptyText: String = "Nothing matches",
-    autoFocus: Boolean = palette == PickerPalette.LAUNCHER
+    autoFocus: Boolean = palette == PickerPalette.LAUNCHER,
+    /** Let the list scroll on its own. Off by default: most callers already
+     *  sit inside something that scrolls, and two would fight. */
+    scrollable: Boolean = false
 ) {
     val colors = tileColors(palette)
     val focus = remember { FocusRequester() }
@@ -139,7 +144,9 @@ fun AppPicker(
                     )
                 }
             }
-            HomeStyle.TEXT -> Column {
+            HomeStyle.TEXT -> Column(
+                if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
+            ) {
                 shown.forEach { app ->
                     AppRowName(
                         label = app.label,
@@ -217,12 +224,24 @@ fun AppTileIcon(
                 contentAlignment = Alignment.Center
             ) {
                 if (icon == null) {
+                    // Some apps hand back no icon at all. A blank square then
+                    // reads as an empty folder or a broken tile, so the first letter
+                    // stands in: it is never blank and it still identifies.
                     Box(
                         Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(colors.surface)
-                    )
+                            .background(colors.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label.trim().take(1).uppercase(),
+                            fontSize = 19.sp,
+                            fontFamily = Brand.sans,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.muted
+                        )
+                    }
                 } else {
                     AppIcon(icon, 44.dp)
                 }

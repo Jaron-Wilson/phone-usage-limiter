@@ -334,6 +334,36 @@ private fun Home() {
      */
     fun mergeInDrawer(dragged: DrawerItem, target: DrawerItem) {
         AppGraph.scope.launch {
+            // A folder dropped on a folder goes inside it, the same as on the
+            // home screen, and leaves the drawer's top level so that two tiles
+            // become one rather than one being quietly duplicated.
+            if (dragged is DrawerItem.Group) {
+                val child = dragged.folder
+                when (target) {
+                    is DrawerItem.Group -> {
+                        val parent = target.folder
+                        if (parent.id == child.id) return@launch
+                        val byId = AppGraph.repo.folderDao.getAll().associateBy { it.id }
+                        if (!canNest(parent, child, byId)) return@launch
+                        if (child.id in parent.subFolders) return@launch
+                        AppGraph.repo.folderDao.upsert(
+                            parent.copy(subFolders = parent.subFolders + child.id)
+                        )
+                        AppGraph.repo.settings.setDrawerFolders(
+                            drawerFolderIds.filterNot { it == child.id }
+                        )
+                    }
+                    is DrawerItem.App -> {
+                        val pkg = target.entry.packageName
+                        if (pkg in child.packages) return@launch
+                        AppGraph.repo.folderDao.upsert(
+                            child.copy(packages = child.packages + pkg)
+                        )
+                    }
+                }
+                return@launch
+            }
+
             val draggedPkg = (dragged as? DrawerItem.App)?.entry?.packageName ?: return@launch
             when (target) {
                 is DrawerItem.Group -> {
@@ -362,6 +392,41 @@ private fun Home() {
                 }
             }
         }
+    }
+
+    /**
+     * A folder or an app dragged past the top of the drawer lands on the home
+     * screen of the mode that is running. That is the only reading that makes
+     * sense: the drawer was opened from that home screen, so a row filed under
+     * some other mode would simply vanish on the drop.
+     */
+    fun addToHome(item: DrawerItem) {
+        val modeId = mode?.id ?: return
+        AppGraph.scope.launch {
+            val existing = AppGraph.repo.homeDao.forMode(modeId)
+            val entry = when (item) {
+                is DrawerItem.Group -> {
+                    if (existing.any { it.folderId == item.folder.id }) return@launch
+                    dev.jaronwilson.modes.core.model.HomeEntry(
+                        modeId = modeId,
+                        folderId = item.folder.id,
+                        sortOrder = existing.size
+                    )
+                }
+                is DrawerItem.App -> {
+                    if (existing.any { it.packageName == item.entry.packageName }) return@launch
+                    dev.jaronwilson.modes.core.model.HomeEntry(
+                        modeId = modeId,
+                        packageName = item.entry.packageName,
+                        sortOrder = existing.size
+                    )
+                }
+            }
+            AppGraph.repo.homeDao.upsert(entry)
+        }
+        // Close the drawer, so the drop is visible where it landed.
+        showAll = false
+        query = ""
     }
 
     fun removeRow(row: HomeRow) {
@@ -649,6 +714,7 @@ private fun Home() {
             visible = showAll && !editing,
             apps = pickerApps,
             folders = drawerFolders,
+            iconFor = { pkg -> icons[pkg] },
             query = query,
             onQueryChange = { query = it },
             onLaunch = { pkg ->
@@ -662,6 +728,7 @@ private fun Home() {
                 folderTrail = listOf(folder.id)
             },
             onMerge = { dragged, target -> mergeInDrawer(dragged, target) },
+            onAddToHome = { item -> addToHome(item) },
             onDismiss = { showAll = false; query = "" }
         )
 
@@ -687,6 +754,7 @@ private fun Home() {
             trail = openTrail,
             style = mode?.homeStyle ?: HomeStyle.TEXT,
             foldersById = foldersById,
+            allApps = pickerApps,
             iconFor = { pkg -> icons[pkg] },
             onOpenSub = { id -> folderTrail = folderTrail + id },
             onLaunch = { pkg ->
@@ -699,6 +767,56 @@ private fun Home() {
                 AppGraph.scope.launch {
                     AppGraph.repo.folderDao.upsert(folder.copy(name = newName))
                 }
+            },
+            onAddApp = { folder, pkg ->
+                if (pkg !in folder.packages) AppGraph.scope.launch {
+                    AppGraph.repo.folderDao.upsert(
+                        folder.copy(packages = folder.packages + pkg)
+                    )
+                }
+            },
+            onRemoveApp = { folder, pkg ->
+                AppGraph.scope.launch {
+                    AppGraph.repo.folderDao.upsert(
+                        folder.copy(packages = folder.packages - pkg)
+                    )
+                }
+            },
+            onRemoveSub = { folder, subId ->
+                AppGraph.scope.launch {
+                    AppGraph.repo.folderDao.upsert(
+                        folder.copy(subFolders = folder.subFolders - subId)
+                    )
+                }
+            },
+            onReorder = { folder, newOrder ->
+                AppGraph.scope.launch {
+                    // Packages the launcher cannot open are not shown and so are
+                    // not in the new order. They keep their place at the end
+                    // rather than being dropped by a rearrange.
+                    val hidden = folder.packages.filterNot { it in newOrder }
+                    AppGraph.repo.folderDao.upsert(
+                        folder.copy(packages = newOrder + hidden)
+                    )
+                }
+            },
+            onDeleteFolder = { folder ->
+                // Take every reference out before the folder itself, so nothing
+                // is left pointing at an id that has stopped existing.
+                AppGraph.scope.launch {
+                    AppGraph.repo.homeDao.clearFolderRefs(folder.id)
+                    AppGraph.repo.settings.setDrawerFolders(drawerFolderIds - folder.id)
+                    AppGraph.repo.folderDao.getAll()
+                        .filter { folder.id in it.subFolders }
+                        .forEach { parent ->
+                            AppGraph.repo.folderDao.upsert(
+                                parent.copy(subFolders = parent.subFolders - folder.id)
+                            )
+                        }
+                    AppGraph.repo.folderDao.delete(folder)
+                }
+                openFolder = null
+                folderTrail = emptyList()
             },
             onDismiss = {
                 if (folderTrail.size > 1) folderTrail = folderTrail.dropLast(1)
