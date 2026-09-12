@@ -150,8 +150,21 @@ The next alarm is the system's own, the same one in the status bar, so it
 includes timers other apps set. It turns gold within the hour, and tapping
 opens whichever app owns it.
 
-Tap a folder to expand it in place, long-press to edit which folders this mode
-uses. Tomorrow is shown in a quieter weight below today, so the evening
+Tap a folder to expand it in place. **Hold anything to start editing**, right
+there on the home screen:
+
+- **drag** a row or tile to move it; it moves as you drag, so the gap you are
+  aiming at is the gap you get
+- **x** takes it off this mode, leaving the folder itself and every other mode
+  untouched
+- **+ app** and **+ folder** add to this mode
+- **tap a folder** while editing to change what is inside. That one is shared,
+  so it says so before you do it
+- **done** when finished
+
+Rows are a fixed height so the drag is arithmetic rather than a hit test
+against a layout still settling, which keeps it exact when the list reorders
+under your finger. Tomorrow is shown in a quieter weight below today, so the evening
 question of "what am I walking into" is answered without unlocking anything.
 All-day entries appear in the lists but are never promoted to the headline: a
 deadline spanning the whole day is worth seeing and is not what you are doing
@@ -612,6 +625,7 @@ commute/Destinations      places worth one tap
 guard/GuardPolicy         whether an app may be opened, pure and well tested
 guard/AppGuardService     the foreground app watcher
 launcher/LauncherActivity the minimal home screen, agenda and folders
+launcher/EditHome         dragging, adding and removing, in place
 tools/AppListExport       builds the dump, shared by the app and the script
 tools/ShareDump           clipboard and share sheet
 tools/ExportReceiver      lets adb ask for a dump without opening the app
@@ -696,5 +710,7 @@ hardest to debug on a phone:
 - **`DuplicateRowsTest`** - repairing a home screen that seeded itself twice.
 - **`DestinationsTest`** - storing places without mangling an address.
 - **`AgendaOrderTest`** - which of two events at the same minute comes first.
+- **`MovedTest`** - moving one row, which runs on every crossed boundary of a
+  drag and must never lose or duplicate an item.
 
-105 tests, all passing.
+113 tests, all passing.

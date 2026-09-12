@@ -62,6 +62,7 @@ import dev.jaronwilson.modes.core.model.HomeStyle
 import dev.jaronwilson.modes.core.model.HomeRow
 import dev.jaronwilson.modes.core.repo.Stats
 import dev.jaronwilson.modes.core.model.resolveHomeRows
+import kotlinx.coroutines.launch
 import dev.jaronwilson.modes.notify.DigestPublisher
 import dev.jaronwilson.modes.schedule.AgendaOrder
 import dev.jaronwilson.modes.schedule.CalEvent
@@ -108,12 +109,15 @@ class LauncherActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Home() {
     val context = LocalContext.current
     var showAll by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var openFolder by remember { mutableStateOf<Long?>(null) }
+    var editing by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf<Picking?>(null) }
 
     val mode by AppGraph.repo.activeMode.collectAsState(initial = null)
     val active by AppGraph.repo.settings.active.collectAsState(
@@ -128,8 +132,9 @@ private fun Home() {
     // Rows switched off for this mode are not drawn at all. Under an allowlist
     // guard they are also not openable, so the screen stays an honest picture
     // of what the mode permits.
-    val rows = remember(entries, folders) {
-        resolveHomeRows(entries, folders).filter { it.entry.enabled && it.packages.isNotEmpty() }
+    val rowsAll = remember(entries, folders) { resolveHomeRows(entries, folders) }
+    val rows = remember(rowsAll) {
+        rowsAll.filter { it.entry.enabled && it.packages.isNotEmpty() }
     }
 
     // The system's next alarm, the same one the status bar shows. Read on the
@@ -187,10 +192,31 @@ private fun Home() {
         }
     }
 
-    BackHandler(enabled = showAll || openFolder != null) {
-        showAll = false
-        openFolder = null
-        query = ""
+    BackHandler(enabled = showAll || openFolder != null || editing || picking != null) {
+        when {
+            picking != null -> picking = null
+            editing -> editing = false
+            else -> {
+                showAll = false
+                openFolder = null
+                query = ""
+            }
+        }
+    }
+
+    val modeId = mode?.id
+    fun persistOrder(newRows: List<HomeRow>) {
+        AppGraph.scope.launch {
+            AppGraph.repo.homeDao.upsertAll(
+                newRows.mapIndexed { i, r -> r.entry.copy(sortOrder = i) }
+            )
+        }
+    }
+
+    fun removeRow(row: HomeRow) {
+        // Takes the row off this mode only. The folder itself, and every other
+        // mode using it, are left alone.
+        AppGraph.scope.launch { AppGraph.repo.homeDao.delete(row.entry) }
     }
 
     val allApps = remember { AppList.all(context) }
@@ -232,7 +258,10 @@ private fun Home() {
                     fontSize = 13.sp,
                     letterSpacing = 2.sp,
                     color = Accent,
-                    modifier = Modifier.clickable { openApp(context) }
+                    modifier = Modifier.combinedClickable(
+                        onClick = { openApp(context) },
+                        onLongClick = { editing = true }
+                    )
                 )
                 if (active.reason.isNotBlank()) {
                     Text(
@@ -262,14 +291,65 @@ private fun Home() {
 
             Spacer(Modifier.height(28.dp))
 
-            if (!showAll && iconStyle) {
+            if (editing) {
+                Spacer(Modifier.height(18.dp))
+                EditBar(
+                    modeName = mode?.name.orEmpty(),
+                    onAddApp = { picking = Picking.App },
+                    onAddFolder = { picking = Picking.Folder },
+                    onDone = { editing = false }
+                )
+                Spacer(Modifier.height(14.dp))
+            }
+
+            if (editing && picking == null) {
+                val ordered = remember(rowsAll) { rowsAll }
+                if (iconStyle) {
+                    EditableIconGrid(
+                        rows = ordered,
+                        columns = 4,
+                        iconFor = { pkg -> icons[pkg] },
+                        label = { row ->
+                            if (row.isFolder) row.name
+                            else AppList.label(context, row.entry.packageName.orEmpty())
+                        },
+                        onMove = { from, to -> persistOrder(ordered.moved(from, to)) },
+                        onRemove = { removeRow(it) },
+                        onOpen = { }
+                    )
+                } else {
+                    EditableRowList(
+                        rows = ordered,
+                        label = { row ->
+                            if (row.isFolder) row.name
+                            else AppList.label(context, row.entry.packageName.orEmpty())
+                        },
+                        onMove = { from, to -> persistOrder(ordered.moved(from, to)) },
+                        onRemove = { removeRow(it) },
+                        onOpen = { row -> if (row.isFolder) picking = Picking.InFolder(row.folder!!.id) }
+                    )
+                }
+                Text(
+                    "Hold a row to drag it. Tap a folder to change what is in it.",
+                    fontSize = 12.sp,
+                    color = InkFaint,
+                    modifier = Modifier.padding(top = 18.dp)
+                )
+            } else if (editing) {
+                PickerPanel(
+                    picking = picking!!,
+                    modeId = modeId.orEmpty(),
+                    existingRows = rowsAll,
+                    onClose = { picking = null }
+                )
+            } else if (!showAll && iconStyle) {
                 Column(Modifier.weight(1f)) {
                     IconHome(
                         rows = rows,
                         icons = icons,
                         openFolder = openFolder,
                         onToggleFolder = { id -> openFolder = if (openFolder == id) null else id },
-                        onEditHome = { openApp(context, editHomeFor = mode?.id) },
+                        onEditHome = { editing = true },
                         onLaunch = { pkg ->
                             Stats.log(EventKind.APP_OPENED, pkg)
                             AppList.launch(context, pkg)
@@ -296,7 +376,7 @@ private fun Home() {
                             onToggle = {
                                 openFolder = if (openFolder == row.entry.id) null else row.entry.id
                             },
-                            onLongPress = { openApp(context, editHomeFor = mode?.id) }
+                            onLongPress = { editing = true }
                         )
                     }
                     item {
