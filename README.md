@@ -579,6 +579,23 @@ half-implemented. `Commute.nextPlan` takes a `travelMinutesFor` function
 specifically so a real provider can be dropped in without touching anything
 else.
 
+## Getting to work
+
+A separate, blunter thing, off by default, under **Rules > Getting to work**.
+For your next event that says work, it sets two alarms: one an hour before it
+starts, one thirty minutes before. The thirty-minute alarm opens the drive
+there rather than only offering a button, because thirty minutes out you are
+getting ready, not already at the wheel, so opening the map is a help. It aims
+at the event's own location, or a Work place you saved under "places worth one
+tap", or failing both the word Work, which Maps resolves to your saved Work.
+
+Opening the map on its own from a background alarm is something Android limits.
+It uses a full-screen intent, the same mechanism a clock alarm uses to show its
+own screen, which is the one way it is allowed. Where a phone still refuses, the
+alarm's notification opens the drive in one tap instead. The two alarm times
+are pure arithmetic in `WorkRunUp.nextWork`, tested without a clock or a
+calendar.
+
 **Driving detection is not built.** It is possible through Play Services
 Activity Recognition, at the cost of a Play Services dependency, the
 `ACTIVITY_RECOGNITION` permission and steady battery use. Worth doing on

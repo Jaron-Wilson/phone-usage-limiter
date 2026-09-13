@@ -45,6 +45,7 @@ class SettingsStore(private val context: Context) {
         val GET_READY = longPreferencesKey("get_ready_minutes")
         val DEFAULT_TRAVEL = longPreferencesKey("default_travel_minutes")
         val COMMUTE_ENABLED = booleanPreferencesKey("commute_enabled")
+        val WORK_ALARMS_ENABLED = booleanPreferencesKey("work_alarms_enabled")
         val DESTINATIONS = stringPreferencesKey("destinations")
         val EDGE_LEFT = stringPreferencesKey("edge_left")
         val EDGE_RIGHT = stringPreferencesKey("edge_right")
@@ -162,6 +163,9 @@ class SettingsStore(private val context: Context) {
     // ---- leaving on time ----
     val commuteEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.COMMUTE_ENABLED] ?: false }
     suspend fun setCommuteEnabled(v: Boolean) = edit { it[K.COMMUTE_ENABLED] = v }
+
+    val workAlarmsEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.WORK_ALARMS_ENABLED] ?: false }
+    suspend fun setWorkAlarmsEnabled(v: Boolean) = edit { it[K.WORK_ALARMS_ENABLED] = v }
 
     val homeAddress: Flow<String> = context.dataStore.data.map { it[K.HOME_ADDRESS].orEmpty() }
     suspend fun setHomeAddress(v: String) = edit { it[K.HOME_ADDRESS] = v }

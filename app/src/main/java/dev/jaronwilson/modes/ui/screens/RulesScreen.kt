@@ -441,6 +441,40 @@ fun RulesScreen() {
                 }
             }
 
+            SectionHeader("Getting to work")
+            Panel {
+                val workAlarms by AppGraph.repo.settings.workAlarmsEnabled
+                    .collectAsState(initial = false)
+                Text(
+                    "For your next event that says work: an alarm an hour before it " +
+                        "starts, another thirty minutes before, and the thirty-minute " +
+                        "one opens the drive there. Set a Work place under \"Places worth " +
+                        "one tap\" for where it navigates, or it uses the event's own " +
+                        "location.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SwitchRow(
+                    title = "Alarms before work, then open the map",
+                    checked = workAlarms,
+                    onChange = { v ->
+                        scope.launch {
+                            AppGraph.repo.settings.setWorkAlarmsEnabled(v)
+                            dev.jaronwilson.modes.commute.WorkRunUpScheduler(context).scheduleNext()
+                        }
+                    }
+                )
+                if (workAlarms) {
+                    Text(
+                        "The thirty-minute alarm can open Maps on its own only if " +
+                            "Android lets it. If it does not on your phone, its " +
+                            "notification still opens the drive in one tap.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             SectionHeader("Calendars on this phone")
             Panel {
                 Text(

@@ -20,6 +20,7 @@ class ModeSyncWorker(
         AppGraph.scheduler.scheduleNextBoundary()
         AppGraph.scheduler.scheduleNextDigest()
         dev.jaronwilson.modes.commute.CommuteScheduler(applicationContext).scheduleNext()
+        dev.jaronwilson.modes.commute.WorkRunUpScheduler(applicationContext).scheduleNext()
         AppGraph.repo.heldDao.prune(System.currentTimeMillis() - PRUNE_AFTER_MS)
         AppGraph.repo.passDao.prune(System.currentTimeMillis())
         AppGraph.repo.eventDao.prune(

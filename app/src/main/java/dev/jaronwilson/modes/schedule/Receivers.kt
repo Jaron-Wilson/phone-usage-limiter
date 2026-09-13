@@ -47,6 +47,7 @@ class BootReceiver : BroadcastReceiver() {
                 AppGraph.scheduler.scheduleNextBoundary()
                 AppGraph.scheduler.scheduleNextDigest()
                 AppGraph.scheduler.ensurePeriodicSync()
+                dev.jaronwilson.modes.commute.WorkRunUpScheduler(context).scheduleNext()
             } catch (t: Throwable) {
                 Log.w("BootReceiver", "boot handling failed", t)
             } finally {
@@ -65,6 +66,7 @@ class CalendarChangedReceiver : BroadcastReceiver() {
             try {
                 AppGraph.scheduler.reevaluate("calendar changed")
                 AppGraph.scheduler.scheduleNextBoundary()
+                dev.jaronwilson.modes.commute.WorkRunUpScheduler(context).scheduleNext()
             } catch (t: Throwable) {
                 Log.w("CalendarChanged", "handling failed", t)
             } finally {
