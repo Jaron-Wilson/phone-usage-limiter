@@ -1,6 +1,7 @@
 package dev.jaronwilson.modes.launcher
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -83,8 +84,6 @@ private const val AbsorbDwellMs = 450L
 @Composable
 fun EditBar(
     modeName: String,
-    onAddApp: () -> Unit,
-    onAddFolder: () -> Unit,
     onDone: () -> Unit
 ) {
     Row(
@@ -97,18 +96,6 @@ fun EditBar(
     ) {
         Text("editing $modeName", fontSize = 12.sp, letterSpacing = 1.sp, color = Accent)
         Spacer(Modifier.weight(1f))
-        Text(
-            "+ app",
-            fontSize = 13.sp,
-            color = Ink,
-            modifier = Modifier.clickable(onClick = onAddApp).padding(horizontal = 8.dp)
-        )
-        Text(
-            "+ folder",
-            fontSize = 13.sp,
-            color = Ink,
-            modifier = Modifier.clickable(onClick = onAddFolder).padding(horizontal = 8.dp)
-        )
         Text(
             "done",
             fontSize = 13.sp,
@@ -377,6 +364,182 @@ fun EditableIconGrid(
     }
 }
 
+/**
+ * The home screen as a fixed board of slots, four across.
+ *
+ * The old editor grew a row for every app and folder and scrolled off the
+ * bottom, so arranging a mode meant chasing tiles you could not all see at
+ * once. This shows a fixed number of slots that always fit the screen: filled
+ * ones you can drag to reorder or drop onto each other to fold together, and
+ * empty ones that are a single tap to fill. A slot holds an app or a folder,
+ * the same either way.
+ *
+ * Drag maths is the same as the old grid: a cell is a known size, so which slot
+ * the finger is over is arithmetic, not a hit test against a moving layout.
+ */
+@Composable
+fun SlotGrid(
+    rows: List<HomeRow>,
+    slots: Int,
+    columns: Int,
+    iconFor: (String) -> android.graphics.drawable.Drawable?,
+    label: (HomeRow) -> String,
+    onMove: (from: Int, to: Int) -> Unit,
+    onRemove: (HomeRow) -> Unit,
+    onOpen: (HomeRow) -> Unit,
+    onAdd: () -> Unit,
+    onDropInto: (dragged: HomeRow, folder: HomeRow) -> Unit
+) {
+    val density = LocalDensity.current
+    var cellWidthPx by remember { mutableFloatStateOf(0f) }
+    val cellHeight = 84.dp
+    val cellHeightPx = with(density) { cellHeight.toPx() }
+
+    // Never fewer than the board size, never fewer than what is already here, so
+    // a mode carrying more than a full board still shows everything.
+    val cellCount = maxOf(slots, rows.size)
+
+    var dragging by remember { mutableIntStateOf(-1) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var hoverIndex by remember { mutableIntStateOf(-1) }
+    var hoverSince by remember { mutableLongStateOf(0L) }
+    var absorbInto by remember { mutableIntStateOf(-1) }
+
+    fun endGridDrag() {
+        if (absorbInto >= 0 && dragging >= 0 &&
+            dragging in rows.indices && absorbInto in rows.indices
+        ) {
+            onDropInto(rows[dragging], rows[absorbInto])
+        }
+        dragging = -1; offsetX = 0f; offsetY = 0f; hoverIndex = -1; absorbInto = -1
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        (0 until cellCount).chunked(columns).forEach { chunk ->
+            Row(Modifier.fillMaxWidth()) {
+                chunk.forEach { index ->
+                    val row = rows.getOrNull(index)
+                    val isDragged = dragging == index
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(cellHeight)
+                            .zIndex(if (isDragged) 1f else 0f)
+                            .graphicsLayer {
+                                if (cellWidthPx == 0f) cellWidthPx = size.width
+                                if (isDragged) {
+                                    translationX = offsetX
+                                    translationY = offsetY
+                                }
+                            }
+                            .then(
+                                if (row == null) Modifier
+                                else Modifier.pointerInput(rows.size, index) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            dragging = index; offsetX = 0f; offsetY = 0f
+                                            hoverIndex = -1; absorbInto = -1
+                                        },
+                                        onDrag = { change, delta ->
+                                            change.consume()
+                                            offsetX += delta.x
+                                            offsetY += delta.y
+                                            val w = if (cellWidthPx > 0f) cellWidthPx else 1f
+                                            val step = (offsetX / w).roundToInt() +
+                                                (offsetY / cellHeightPx).roundToInt() * columns
+                                            val from = dragging
+                                            val to = (from + step).coerceIn(0, rows.lastIndex)
+                                            val draggedIsApp = rows.getOrNull(from)?.isFolder == false
+                                            if (to != from && draggedIsApp) {
+                                                val now = System.currentTimeMillis()
+                                                if (hoverIndex != to) {
+                                                    hoverIndex = to; hoverSince = now; absorbInto = -1
+                                                } else if (now - hoverSince > AbsorbDwellMs) {
+                                                    absorbInto = to
+                                                }
+                                            } else if (to != from) {
+                                                onMove(from, to)
+                                                dragging = to
+                                                val moved = to - from
+                                                offsetX -= (moved % columns) * w
+                                                offsetY -= (moved / columns) * cellHeightPx
+                                                hoverIndex = -1; absorbInto = -1
+                                            }
+                                        },
+                                        onDragEnd = { endGridDrag() },
+                                        onDragCancel = { endGridDrag() }
+                                    )
+                                }
+                            )
+                    ) {
+                        if (row == null) {
+                            EmptySlot(onAdd, Modifier.align(Alignment.Center))
+                        } else {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.align(Alignment.Center)
+                            ) {
+                                Box(contentAlignment = Alignment.TopEnd) {
+                                    Box(
+                                        Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(
+                                                if (absorbInto == index) Brand.Launcher.accent.copy(alpha = 0.4f)
+                                                else Brand.Launcher.surface
+                                            )
+                                            .clickable { onOpen(row) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val first = row.packages.firstOrNull()
+                                        if (row.isFolder) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                row.packages.take(4).chunked(2).forEach { pair ->
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                        pair.forEach { AppIcon(iconFor(it), 15.dp) }
+                                                    }
+                                                }
+                                            }
+                                        } else if (first != null) {
+                                            AppIcon(iconFor(first), 34.dp)
+                                        }
+                                    }
+                                    RemoveBadge { onRemove(row) }
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    label(row),
+                                    fontSize = 11.sp,
+                                    color = if (isDragged) InkBright else InkDim,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+                repeat(columns - chunk.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** An open slot: one tap to put an app or a folder here. */
+@Composable
+private fun EmptySlot(onAdd: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(46.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .border(1.dp, Brand.Launcher.faint.copy(alpha = 0.5f), RoundedCornerShape(13.dp))
+            .clickable(onClick = onAdd),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("+", fontSize = 22.sp, color = InkFaint)
+    }
+}
+
 @Composable
 private fun RemoveBadge(onClick: () -> Unit) {
     Box(
@@ -406,6 +569,9 @@ sealed interface Picking {
 
     /** Put one of the shared folders on this mode's home screen. */
     data object Folder : Picking
+
+    /** Fill an empty slot: pick a folder or an app from one place. */
+    data object Slot : Picking
 
     /** Change what is inside a folder. Shared, so this changes every mode. */
     data class InFolder(val folderId: Long) : Picking
@@ -438,6 +604,7 @@ fun PickerPanel(
                 when (picking) {
                     Picking.App -> "add an app"
                     Picking.Folder -> "add a folder"
+                    Picking.Slot -> "add to this slot"
                     is Picking.InFolder -> "what is in this folder"
                 },
                 fontSize = 12.sp,
@@ -455,6 +622,87 @@ fun PickerPanel(
         Spacer(Modifier.height(14.dp))
 
         when (picking) {
+            Picking.Slot -> {
+                // One place to fill a slot: your folders first, then every app,
+                // and everything is an icon. The whole point of this screen is
+                // that adding never drops you from an icon board into a text
+                // list, so the folders are tiles here, not rows.
+                val colors = tileColors(PickerPalette.LAUNCHER)
+                val iconOf: (String) -> android.graphics.drawable.Drawable? =
+                    { pkg -> apps.firstOrNull { it.packageName == pkg }?.icon }
+                val usedFolders = existingRows.mapNotNull { it.entry.folderId }.toSet()
+                val available = folders.filterNot { it.id in usedFolders }
+
+                if (available.isNotEmpty()) {
+                    Text("FOLDERS", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
+                    Spacer(Modifier.height(10.dp))
+                    available.chunked(4).forEach { chunk ->
+                        Row(Modifier.fillMaxWidth()) {
+                            chunk.forEach { folder ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            scope.launch {
+                                                AppGraph.repo.homeDao.upsert(
+                                                    dev.jaronwilson.modes.core.model.HomeEntry(
+                                                        modeId = modeId,
+                                                        folderId = folder.id,
+                                                        sortOrder = existingRows.size
+                                                    )
+                                                )
+                                            }
+                                            onClose()
+                                        }
+                                        .padding(vertical = 8.dp)
+                                ) {
+                                    FolderGlyph(
+                                        folder.packages.take(4).map(iconOf), 46.dp, colors
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        folder.name,
+                                        fontSize = 11.sp,
+                                        color = InkDim,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            repeat(4 - chunk.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text("APPS", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                val usedApps = existingRows.mapNotNull { it.entry.packageName }.toSet()
+                AppPicker(
+                    apps = apps.filterNot { it.packageName in usedApps },
+                    // Always an icon grid here, whatever the mode's own style,
+                    // so filling a slot matches the board you are filling.
+                    style = HomeStyle.ICONS,
+                    query = query,
+                    onQueryChange = { query = it },
+                    palette = PickerPalette.LAUNCHER,
+                    limit = 24,
+                    onPick = { app ->
+                        scope.launch {
+                            AppGraph.repo.homeDao.upsert(
+                                dev.jaronwilson.modes.core.model.HomeEntry(
+                                    modeId = modeId,
+                                    packageName = app.packageName,
+                                    sortOrder = existingRows.size
+                                )
+                            )
+                        }
+                        onClose()
+                    }
+                )
+            }
+
             Picking.Folder -> {
                 val used = existingRows.mapNotNull { it.entry.folderId }.toSet()
                 val available = folders.filterNot { it.id in used }

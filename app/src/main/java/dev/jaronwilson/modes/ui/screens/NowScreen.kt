@@ -365,17 +365,24 @@ fun NowScreen(onOpenModes: () -> Unit) {
             SectionHeader("Permissions")
             Panel {
                 perms.forEach { item ->
+                    // Tapping a row opens its setting whether it is on or off, so
+                    // you can go turn something back off, or check why Android
+                    // silently dropped it, without hunting through Settings.
+                    val open: (() -> Unit)? = item.intent?.let { intent ->
+                        {
+                            runCatching {
+                                if (item.key == "home") roleLauncher.launch(intent)
+                                else context.startActivity(intent)
+                            }
+                        }
+                    }
                     RowItem(
                         title = item.title,
                         subtitle = if (item.granted) "On" else item.why,
+                        onClick = open,
                         trailing = {
-                            if (!item.granted && item.intent != null) {
-                                TextButton(onClick = {
-                                    runCatching {
-                                        if (item.key == "home") roleLauncher.launch(item.intent)
-                                        else context.startActivity(item.intent)
-                                    }
-                                }) { Text("Grant") }
+                            if (!item.granted && open != null) {
+                                TextButton(onClick = open) { Text("Grant") }
                             } else {
                                 Text(
                                     if (item.granted) "on" else "off",

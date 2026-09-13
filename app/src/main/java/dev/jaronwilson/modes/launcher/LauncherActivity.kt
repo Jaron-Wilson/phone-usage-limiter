@@ -96,6 +96,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.JulianFields
 
+// A full board of home slots: four across, three down. Enough to hold a mode's
+// apps and folders on one screen without scrolling, few enough to stay a
+// deliberate choice about what a mode is for.
+private const val HOME_SLOTS = 12
+
 // One palette with the rest of the app, and with jaronwilson.org.
 private val Ink = Brand.Launcher.ink
 private val InkBright = Brand.Launcher.ink
@@ -572,7 +577,9 @@ private fun Home() {
                 )
             }
 
-            if (!showAll) {
+            // The day steps aside while you edit, so the slot board has the
+            // whole screen and never needs to scroll.
+            if (!showAll && !editing) {
                 Spacer(Modifier.height(24.dp))
                 Agenda(events, calendarState, highlight, calendarPriority)
             }
@@ -583,8 +590,6 @@ private fun Home() {
                 Spacer(Modifier.height(18.dp))
                 EditBar(
                     modeName = mode?.name.orEmpty(),
-                    onAddApp = { picking = Picking.App },
-                    onAddFolder = { picking = Picking.Folder },
                     onDone = { editing = false }
                 )
                 Spacer(Modifier.height(14.dp))
@@ -593,8 +598,13 @@ private fun Home() {
             if (editing && picking == null) {
                 val ordered = remember(rowsAll) { rowsAll }
                 if (iconStyle) {
-                    EditableIconGrid(
+                    // A fixed board of slots, four across. Filled slots drag to
+                    // reorder or drop together into a folder; empty slots are
+                    // one tap to fill. It always fits the screen, so editing a
+                    // mode never means scrolling a list off the bottom.
+                    SlotGrid(
                         rows = ordered,
+                        slots = HOME_SLOTS,
                         columns = 4,
                         iconFor = { pkg -> icons[pkg] },
                         label = { row ->
@@ -604,7 +614,14 @@ private fun Home() {
                         onMove = { from, to -> persistOrder(ordered.moved(from, to)) },
                         onRemove = { removeRow(it) },
                         onOpen = { row -> if (row.isFolder) picking = Picking.InFolder(row.folder!!.id) },
+                        onAdd = { picking = Picking.Slot },
                         onDropInto = { dragged, target -> dropInto(dragged, target) }
+                    )
+                    Text(
+                        "Tap a + to fill a slot. Hold a tile to drag. Rest one on another to fold them together.",
+                        fontSize = 12.sp,
+                        color = InkFaint,
+                        modifier = Modifier.padding(top = 18.dp)
                     )
                 } else {
                     EditableRowList(
@@ -618,13 +635,13 @@ private fun Home() {
                         onOpen = { row -> if (row.isFolder) picking = Picking.InFolder(row.folder!!.id) },
                         onDropInto = { dragged, target -> dropInto(dragged, target) }
                     )
+                    Text(
+                        "Hold to drag. Rest on a folder to drop it in. Tap a folder to see inside.",
+                        fontSize = 12.sp,
+                        color = InkFaint,
+                        modifier = Modifier.padding(top = 18.dp)
+                    )
                 }
-                Text(
-                    "Hold to drag. Rest on a folder to drop it in. Tap a folder to see inside.",
-                    fontSize = 12.sp,
-                    color = InkFaint,
-                    modifier = Modifier.padding(top = 18.dp)
-                )
             } else if (editing) {
                 PickerPanel(
                     picking = picking!!,
