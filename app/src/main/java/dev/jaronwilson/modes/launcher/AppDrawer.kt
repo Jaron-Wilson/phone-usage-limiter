@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -193,6 +194,30 @@ fun AppDrawer(
                         dragFrom = -1; hover = -1; mergeTarget = -1; dragDx = 0f; dragDy = 0f
                     }
 
+                    // Swipe the whole tray down to go back home. Once the grid
+                    // is scrolled to the top it stops taking the drag, so the
+                    // leftover downward pull collects here and, past a thumb's
+                    // travel, closes the tray. Swiping down from the top is how
+                    // you dismissed it, so it is how you leave.
+                    val dismissPull = remember(onDismiss) {
+                        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                            var pulled = 0f
+                            override fun onPostScroll(
+                                consumed: Offset,
+                                available: Offset,
+                                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+                            ): Offset {
+                                if (available.y > 0f) {
+                                    pulled += available.y
+                                    if (pulled > 220f) { pulled = 0f; onDismiss() }
+                                } else if (available.y < 0f) {
+                                    pulled = 0f
+                                }
+                                return Offset.Zero
+                            }
+                        }
+                    }
+
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(4),
                         state = gridState,
@@ -202,6 +227,7 @@ fun AppDrawer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .nestedScroll(dismissPull)
                             // After a long press, so an ordinary flick still
                             // scrolls the list.
                             .pointerInput(items.size) {

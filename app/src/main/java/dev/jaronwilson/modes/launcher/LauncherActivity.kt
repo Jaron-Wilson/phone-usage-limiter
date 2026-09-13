@@ -669,16 +669,7 @@ private fun Home() {
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    Text(
-                        "everything else",
-                        fontSize = 13.sp,
-                        letterSpacing = 1.sp,
-                        color = InkFaint,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showAll = true }
-                            .padding(vertical = 14.dp)
-                    )
+                    HomeFooter(onEdit = { editing = true })
                 }
             } else if (!showAll) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -701,16 +692,7 @@ private fun Home() {
                     }
                     item {
                         Spacer(Modifier.height(20.dp))
-                        Text(
-                            "everything else",
-                            fontSize = 13.sp,
-                            letterSpacing = 1.sp,
-                            color = InkFaint,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showAll = true }
-                                .padding(vertical = 12.dp)
-                        )
+                        HomeFooter(onEdit = { editing = true })
                     }
                 }
             }
@@ -839,6 +821,33 @@ private fun Home() {
                 if (folderTrail.size > 1) folderTrail = folderTrail.dropLast(1)
                 else { openFolder = null; folderTrail = emptyList() }
             }
+        )
+    }
+}
+
+/**
+ * The line under the home screen: a way into editing.
+ *
+ * Editing used to be a long press on a tile, which nobody finds and which an
+ * app tile mostly reads as "open me" instead. A word that says "edit" is a
+ * word you can find. "Everything else" is gone from here: swiping up is the
+ * way to the app tray now.
+ */
+@Composable
+private fun HomeFooter(onEdit: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(Modifier.weight(1f))
+        Text(
+            "edit",
+            fontSize = 13.sp,
+            letterSpacing = 1.sp,
+            color = InkFaint,
+            modifier = Modifier
+                .clickable(onClick = onEdit)
+                .padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
 }
