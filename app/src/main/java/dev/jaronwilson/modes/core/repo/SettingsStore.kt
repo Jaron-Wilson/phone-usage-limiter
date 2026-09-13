@@ -51,6 +51,9 @@ class SettingsStore(private val context: Context) {
         val TAP_CARD_URL = stringPreferencesKey("tap_card_url")
         val DRAWER_FOLDERS = stringPreferencesKey("drawer_folders")
         val CALENDAR_PRIORITY = stringPreferencesKey("calendar_priority")
+        val PLACE_MODE = stringPreferencesKey("place_mode")
+        val PLACE_NAME = stringPreferencesKey("place_name")
+        val PLACE_UNTIL = longPreferencesKey("place_until")
     }
 
     data class ActiveState(
@@ -86,6 +89,25 @@ class SettingsStore(private val context: Context) {
     /** Manual override: pinned mode and the moment it lapses (0 = until next change). */
     val manualOverride: Flow<Pair<String?, Long>> = context.dataStore.data.map { p ->
         p[K.MANUAL_MODE] to (p[K.MANUAL_UNTIL] ?: 0L)
+    }
+
+    /**
+     * The mode a place you are standing in asks for, if any, with the place's
+     * name and a freshness deadline. Written by the location check and read by
+     * the resolver, exactly like the manual override, so the resolver stays
+     * pure and never touches a radio.
+     */
+    val placeOverride: Flow<Triple<String?, String, Long>> = context.dataStore.data.map { p ->
+        Triple(p[K.PLACE_MODE], p[K.PLACE_NAME].orEmpty(), p[K.PLACE_UNTIL] ?: 0L)
+    }
+    suspend fun setPlaceOverride(modeId: String?, name: String, until: Long) {
+        context.dataStore.edit { p ->
+            if (modeId == null) {
+                p.remove(K.PLACE_MODE); p.remove(K.PLACE_NAME); p.remove(K.PLACE_UNTIL)
+            } else {
+                p[K.PLACE_MODE] = modeId; p[K.PLACE_NAME] = name; p[K.PLACE_UNTIL] = until
+            }
+        }
     }
 
     suspend fun setManualOverride(modeId: String?, until: Long) {

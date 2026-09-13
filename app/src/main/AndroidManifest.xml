@@ -10,6 +10,12 @@
     <!-- Only ever used to switch a calendar's own sync on or off, never to
          create, change or delete an event. -->
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- Optional. Only to notice when you are at a place you saved, so it can
+         switch the mode. Background access lets that work while the app is not
+         open; without it, places only update while Modes is on screen. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- To repair a calendar account that Android reports as enabled while
          refusing to sync it. Both are install-time permissions. -->
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />

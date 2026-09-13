@@ -126,6 +126,23 @@ object Perms {
                 intent = homeRoleIntent(context)
             ),
             PermItem(
+                key = "location",
+                title = "Location",
+                why = "Optional. Lets a place you saved switch your mode when you are " +
+                    "there, like Personal at home or School on campus.",
+                granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED,
+                required = false,
+                intent = appSettings(context),
+                note = "For places to switch modes while Modes is closed, set Location " +
+                    "to \"Allow all the time\" here. \"While using\" only updates them " +
+                    "with the app open."
+            ),
+            PermItem(
                 key = "usage",
                 title = "Usage access",
                 why = "Optional. Lets the Stats screen show screen time per app, " +
@@ -177,6 +194,9 @@ object Perms {
         add(Manifest.permission.READ_CALENDAR)
         add(Manifest.permission.WRITE_CALENDAR)
         add(Manifest.permission.READ_CONTACTS)
+        // Location is deliberately not requested on launch. It is optional and
+        // sensitive, so it is asked for only when you add a place, and can be
+        // granted from the Location row on the Now tab.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }

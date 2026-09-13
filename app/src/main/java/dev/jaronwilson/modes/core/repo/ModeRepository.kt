@@ -78,6 +78,7 @@ class ModeRepository(
     val folderDao = db.folderDao()
     val eventDao = db.eventDao()
     val passDao = db.passDao()
+    val placeDao = db.placeDao()
     val settings = SettingsStore(context)
 
     /** Last known policy. Safe to read from any thread. */

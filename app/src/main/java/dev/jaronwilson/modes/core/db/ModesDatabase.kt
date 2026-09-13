@@ -8,6 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.TypeConverters
 import dev.jaronwilson.modes.core.model.AppPass
+import dev.jaronwilson.modes.core.model.Place
 import dev.jaronwilson.modes.core.model.CalendarRule
 import dev.jaronwilson.modes.core.model.Folder
 import dev.jaronwilson.modes.core.model.HeldNotification
@@ -29,9 +30,10 @@ import dev.jaronwilson.modes.core.model.Vip
         HomeEntry::class,
         Folder::class,
         UsageEvent::class,
-        AppPass::class
+        AppPass::class,
+        Place::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -43,6 +45,7 @@ abstract class ModesDatabase : RoomDatabase() {
     abstract fun folderDao(): FolderDao
     abstract fun eventDao(): EventDao
     abstract fun passDao(): PassDao
+    abstract fun placeDao(): PlaceDao
 
     companion object {
         /**
@@ -57,6 +60,23 @@ abstract class ModesDatabase : RoomDatabase() {
             }
         }
 
+        /** Location-based mode switching arrives with its own table. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS places (" +
+                        "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
+                        "enabled INTEGER NOT NULL DEFAULT 1, " +
+                        "name TEXT NOT NULL, " +
+                        "latitude REAL NOT NULL, " +
+                        "longitude REAL NOT NULL, " +
+                        "radiusMeters REAL NOT NULL DEFAULT 150.0, " +
+                        "modeId TEXT NOT NULL, " +
+                        "priority INTEGER NOT NULL DEFAULT 0)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: ModesDatabase? = null
 
@@ -66,7 +86,7 @@ abstract class ModesDatabase : RoomDatabase() {
                 ModesDatabase::class.java,
                 "modes.db"
             )
-                .addMigrations(MIGRATION_6_7)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .build()
                 .also { instance = it }

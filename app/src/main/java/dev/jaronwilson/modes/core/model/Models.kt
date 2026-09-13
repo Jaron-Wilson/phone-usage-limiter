@@ -88,7 +88,7 @@ enum class GuardMode {
 enum class MatchField { TITLE, TEXT, ANY, CHANNEL, PACKAGE }
 
 /** Where a mode decision came from. Higher ordinal wins. */
-enum class ModeSource { DEFAULT, TIME_RULE, CALENDAR, MANUAL }
+enum class ModeSource { DEFAULT, TIME_RULE, CALENDAR, LOCATION, MANUAL }
 
 @Entity(tableName = "modes")
 data class Mode(
@@ -172,6 +172,28 @@ data class TimeRule(
     val modeId: String,
     val priority: Int = 0,
     val note: String = ""
+)
+
+/**
+ * A place on the map that puts you in a mode while you are there.
+ *
+ * "At home, be Personal. On campus, be School." The radius is generous on
+ * purpose: phone location without the GPS burning is good to a block, not a
+ * doorstep, and a place you have to stand exactly on is a place that never
+ * triggers.
+ */
+@Entity(tableName = "places")
+data class Place(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val enabled: Boolean = true,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+    /** How close counts as "here", in metres. */
+    val radiusMeters: Double = 150.0,
+    val modeId: String,
+    /** Higher wins when you are standing inside two places at once. */
+    val priority: Int = 0
 )
 
 @Entity(tableName = "notif_rules", indices = [Index("packageName")])

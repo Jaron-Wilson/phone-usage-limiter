@@ -49,6 +49,7 @@ class ScheduleResolver(
         }
 
         calendarDecision(now)?.let { return it }
+        locationDecision(now)?.let { return it }
         timeDecision(now)?.let { return it }
 
         val fallback = repo.defaultMode()
@@ -57,6 +58,24 @@ class ScheduleResolver(
 
     private suspend fun currentManual(): Pair<String?, Long> =
         repo.settings.manualOverride.first()
+
+    /**
+     * A place you are standing in, if the last location check found one and it
+     * is still fresh. The check writes the answer to settings; this only reads
+     * it, so the resolver never waits on a radio. It sits below the calendar,
+     * because a meeting named "Work" is a stronger signal than being in the
+     * building, and above the time rules.
+     */
+    private suspend fun locationDecision(now: Long): Decision? {
+        val (modeId, name, until) = repo.settings.placeOverride.first()
+        if (modeId == null || (until != 0L && until <= now)) return null
+        return Decision(
+            modeId = modeId,
+            source = ModeSource.LOCATION,
+            reason = if (name.isBlank()) "At a saved place" else "At $name",
+            until = until
+        )
+    }
 
     private suspend fun calendarDecision(now: Long): Decision? {
         val rules = repo.ruleDao.activeCalendarRules()

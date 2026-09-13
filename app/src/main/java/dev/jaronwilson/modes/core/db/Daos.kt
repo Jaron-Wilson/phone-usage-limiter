@@ -13,6 +13,7 @@ import dev.jaronwilson.modes.core.model.HeldNotification
 import dev.jaronwilson.modes.core.model.HomeEntry
 import dev.jaronwilson.modes.core.model.Mode
 import dev.jaronwilson.modes.core.model.NotifRule
+import dev.jaronwilson.modes.core.model.Place
 import dev.jaronwilson.modes.core.model.TimeRule
 import dev.jaronwilson.modes.core.model.UsageEvent
 import dev.jaronwilson.modes.core.model.Vip
@@ -160,6 +161,21 @@ interface FolderDao {
 
     @Query("SELECT COUNT(*) FROM folders")
     suspend fun count(): Int
+}
+
+@Dao
+interface PlaceDao {
+    @Query("SELECT * FROM places ORDER BY priority DESC, name")
+    fun observeAll(): Flow<List<Place>>
+
+    @Query("SELECT * FROM places ORDER BY priority DESC, name")
+    suspend fun getAll(): List<Place>
+
+    @Upsert
+    suspend fun upsert(place: Place): Long
+
+    @Delete
+    suspend fun delete(place: Place)
 }
 
 @Dao

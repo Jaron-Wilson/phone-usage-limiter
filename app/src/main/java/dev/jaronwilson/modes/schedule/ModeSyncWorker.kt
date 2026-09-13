@@ -13,6 +13,9 @@ class ModeSyncWorker(
 
     override suspend fun doWork(): Result {
         AppGraph.ensure(applicationContext)
+        // Check where we are before deciding the mode, so arriving somewhere
+        // with a saved place takes effect on the next sync.
+        LocationGate.refresh(applicationContext, AppGraph.repo)
         AppGraph.scheduler.reevaluate("periodic sync")
         AppGraph.scheduler.scheduleNextBoundary()
         AppGraph.scheduler.scheduleNextDigest()

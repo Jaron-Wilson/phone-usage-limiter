@@ -153,6 +153,7 @@ class ModeApplier(
     private fun sourceLabel(source: ModeSource) = when (source) {
         ModeSource.MANUAL -> "Set by hand"
         ModeSource.CALENDAR -> "From your calendar"
+        ModeSource.LOCATION -> "From where you are"
         ModeSource.TIME_RULE -> "On schedule"
         ModeSource.DEFAULT -> "Default"
     }

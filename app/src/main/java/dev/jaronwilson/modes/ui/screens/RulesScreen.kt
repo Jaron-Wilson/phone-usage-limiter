@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import dev.jaronwilson.modes.core.repo.SettingsStore
 import dev.jaronwilson.modes.schedule.AgendaOrder
+import dev.jaronwilson.modes.schedule.LocationGate
 import dev.jaronwilson.modes.core.model.NotifRule
 import dev.jaronwilson.modes.core.model.Vip
 import dev.jaronwilson.modes.commute.CommuteScheduler
@@ -73,6 +74,7 @@ fun RulesScreen() {
     val timeRules by AppGraph.repo.ruleDao.observeTimeRules().collectAsState(initial = emptyList())
     val notifRules by AppGraph.repo.ruleDao.observeNotifRules().collectAsState(initial = emptyList())
     val vips by AppGraph.repo.ruleDao.observeVips().collectAsState(initial = emptyList())
+    val places by AppGraph.repo.placeDao.observeAll().collectAsState(initial = emptyList())
 
     fun modeName(id: String) = modes.firstOrNull { it.id == id }?.name ?: id
 
@@ -631,6 +633,13 @@ fun RulesScreen() {
                 }
             }
 
+            SectionHeader("Where you are")
+            PlacesSection(
+                places = places,
+                modes = modes,
+                modeName = { modeName(it) }
+            )
+
             SectionHeader("Sorting notifications")
             Panel {
                 Text(
@@ -749,4 +758,185 @@ private fun MinutesField(label: String, value: Long, onChange: (Long) -> Unit) {
         singleLine = true,
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlacesSection(
+    places: List<dev.jaronwilson.modes.core.model.Place>,
+    modes: List<dev.jaronwilson.modes.core.model.Mode>,
+    modeName: (String) -> String
+) {
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var adding by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("") }
+    var draftName by remember { mutableStateOf("") }
+    var draftMode by remember { mutableStateOf(modes.firstOrNull()?.id.orEmpty()) }
+    var draftRadius by remember { mutableStateOf(150.0) }
+    var draftLat by remember { mutableStateOf<Double?>(null) }
+    var draftLng by remember { mutableStateOf<Double?>(null) }
+
+    // Captures a fix once permission is settled, whether it was already granted
+    // or just granted through the prompt.
+    fun capture() {
+        busy = true
+        status = "Finding you…"
+        scope.launch {
+            val fix = LocationGate.oneFix(context)
+            busy = false
+            if (fix == null) {
+                status = "Could not get a location. Try again outside or near a window."
+            } else {
+                draftLat = fix.latitude
+                draftLng = fix.longitude
+                status = "Location captured."
+            }
+        }
+    }
+
+    val askLocation = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        if (granted.values.any { it }) capture()
+        else status = "Location is off. You can turn it on from the Now tab."
+    }
+
+    Panel {
+        Text(
+            "Save a place and pick the mode it puts you in. When the phone notices " +
+                "you are there, it switches, unless a calendar event says otherwise. " +
+                "A meeting still wins over a place.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        places.forEach { place ->
+            RowItem(
+                title = place.name,
+                subtitle = "${modeName(place.modeId)} · within ${place.radiusMeters.toInt()} m",
+                trailing = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Switch(
+                            checked = place.enabled,
+                            onCheckedChange = { v ->
+                                scope.launch {
+                                    AppGraph.repo.placeDao.upsert(place.copy(enabled = v))
+                                    LocationGate.refresh(context, AppGraph.repo)
+                                    AppGraph.scheduler.reevaluate("place toggled")
+                                }
+                            }
+                        )
+                        TextButton(onClick = {
+                            scope.launch {
+                                AppGraph.repo.placeDao.delete(place)
+                                LocationGate.refresh(context, AppGraph.repo)
+                                AppGraph.scheduler.reevaluate("place deleted")
+                            }
+                        }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        if (!adding) {
+            TextButton(onClick = {
+                adding = true
+                status = ""
+                draftName = ""
+                draftMode = modes.firstOrNull()?.id.orEmpty()
+                draftRadius = 150.0
+                draftLat = null
+                draftLng = null
+            }) { Text("Add a place") }
+        } else {
+            // Capture where you are now. No map picker: a place you set by
+            // standing in it is the place you actually mean.
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    if (LocationGate.hasPermission(context)) {
+                        capture()
+                    } else {
+                        askLocation.launch(
+                            arrayOf(
+                                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
+                    }
+                }
+            ) { Text(if (draftLat == null) "Use my location here" else "Update to here") }
+
+            if (status.isNotBlank()) {
+                Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            }
+
+            OutlinedTextField(
+                value = draftName,
+                onValueChange = { draftName = it.take(24) },
+                label = { Text("Name, e.g. Home or Campus") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text("Mode", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                modes.forEach { mode ->
+                    FilterChip(
+                        selected = draftMode == mode.id,
+                        onClick = { draftMode = mode.id },
+                        label = { Text(mode.name) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "How close counts: ${draftRadius.toInt()} m",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(100.0, 150.0, 300.0, 500.0).forEach { r ->
+                    FilterChip(
+                        selected = draftRadius == r,
+                        onClick = { draftRadius = r },
+                        label = { Text("${r.toInt()} m") }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = draftLat != null && draftName.isNotBlank() && draftMode.isNotBlank(),
+                    onClick = {
+                        val lat = draftLat; val lng = draftLng
+                        if (lat != null && lng != null) {
+                            scope.launch {
+                                AppGraph.repo.placeDao.upsert(
+                                    dev.jaronwilson.modes.core.model.Place(
+                                        name = draftName.trim(),
+                                        latitude = lat,
+                                        longitude = lng,
+                                        radiusMeters = draftRadius,
+                                        modeId = draftMode
+                                    )
+                                )
+                                LocationGate.refresh(context, AppGraph.repo)
+                                AppGraph.scheduler.reevaluate("place added")
+                            }
+                            adding = false
+                        }
+                    }
+                ) { Text("Save place") }
+                TextButton(onClick = { adding = false }) { Text("Cancel") }
+            }
+        }
+    }
 }

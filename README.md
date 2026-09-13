@@ -281,8 +281,20 @@ Highest priority wins:
 2. **A calendar event** matching a calendar rule. A shorter event beats a longer
    one it sits inside, so a 30 minute block named "deep work" wins over the
    4 hour "Offsite" it lives in
-3. **A time of day rule**, e.g. 22:30 to 07:00 is Sleep
-4. **The default mode**
+3. **A place you saved**, when the phone notices you are standing in it. A
+   meeting still wins, because a calendar that says Work is a stronger signal
+   than being in the building
+4. **A time of day rule**, e.g. 22:30 to 07:00 is Sleep
+5. **The default mode**
+
+Places live under **Rules > Where you are**. Save one by standing in it and
+tapping "use my location here", name it, pick its mode and how close counts.
+Location is optional and asked for only then, never on launch. For a place to
+switch modes while the app is closed, Android needs Location set to "Allow all
+the time"; "while using" only updates places with Modes open. The match is
+plain arithmetic against a generous radius, so it works without burning the GPS,
+and a match fades on its own if the phone stops getting fixes rather than
+pinning you to a place you left.
 
 Out of the box your calendar decides everything except bedtime:
 
