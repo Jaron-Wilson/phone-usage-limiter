@@ -208,6 +208,10 @@ fun AppTileIcon(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
+            // Fill the grid cell so the icon centres in it and the label has a
+            // width to truncate against. Without this a long name sets the
+            // tile's width, pushing its icon off-centre from the column.
+            .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 6.dp)
@@ -257,7 +261,8 @@ fun AppTileIcon(
             color = if (selected) colors.accent else colors.muted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

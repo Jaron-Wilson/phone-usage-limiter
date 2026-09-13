@@ -293,6 +293,7 @@ fun AppDrawer(
                                     is DrawerItem.Group -> Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier
+                                            .fillMaxWidth()
                                             .clip(RoundedCornerShape(12.dp))
                                             .padding(vertical = 6.dp)
                                     ) {
@@ -310,7 +311,10 @@ fun AppDrawer(
                                             fontSize = 11.5.sp,
                                             fontFamily = Brand.sans,
                                             color = colors.muted,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
                                         )
                                     }
                                 }
