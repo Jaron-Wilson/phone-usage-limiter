@@ -475,6 +475,38 @@ fun RulesScreen() {
                 }
             }
 
+            SectionHeader("The day, on your home screen")
+            Panel {
+                val showTomorrow by AppGraph.repo.settings.agendaShowTomorrow
+                    .collectAsState(initial = true)
+                val todayLimit by AppGraph.repo.settings.agendaTodayLimit
+                    .collectAsState(initial = 4)
+                Text(
+                    "How much of the day the black home screen shows. What is happening " +
+                        "now or next is always there; the rest is up to you.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text("Today", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        0 to "Just now/next", 3 to "3", 5 to "5", 8 to "All"
+                    ).forEach { (n, label) ->
+                        FilterChip(
+                            selected = todayLimit == n,
+                            onClick = { scope.launch { AppGraph.repo.settings.setAgendaTodayLimit(n) } },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                SwitchRow(
+                    title = "Show tomorrow too",
+                    checked = showTomorrow,
+                    onChange = { v -> scope.launch { AppGraph.repo.settings.setAgendaShowTomorrow(v) } }
+                )
+            }
+
             SectionHeader("Calendars on this phone")
             Panel {
                 Text(
@@ -642,6 +674,9 @@ fun RulesScreen() {
                     )
                 }
             }
+
+            SectionHeader("Sleep and waking")
+            SleepSchedule(timeRules = timeRules)
 
             SectionHeader("By time of day")
             Panel {
@@ -973,4 +1008,100 @@ private fun PlacesSection(
             }
         }
     }
+}
+
+/**
+ * Bedtime and wake time as two clocks, plus a one-tap daily alarm at wake.
+ *
+ * These edit the single Sleep time rule, so setting bedtime to 20:00 is the
+ * same as saying "Sleep runs from 8pm". The wake alarm is handed to the phone's
+ * Clock app, which is the thing that actually rings and that you already know
+ * how to silence, rather than a half-built alarm of our own.
+ */
+@Composable
+private fun SleepSchedule(timeRules: List<dev.jaronwilson.modes.core.model.TimeRule>) {
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sleep = timeRules.firstOrNull { it.modeId == "sleep" }
+    // Sensible starting points if the Sleep rule was ever removed.
+    val bedtime = sleep?.startMinute ?: (22 * 60 + 30)
+    val wake = sleep?.endMinute ?: (7 * 60)
+
+    fun saveSleep(newStart: Int, newEnd: Int) {
+        scope.launch {
+            val base = sleep ?: dev.jaronwilson.modes.core.model.TimeRule(
+                daysMask = 0b1111111,
+                startMinute = newStart,
+                endMinute = newEnd,
+                modeId = "sleep",
+                priority = 10,
+                note = "Sleep"
+            )
+            AppGraph.repo.ruleDao.upsert(base.copy(startMinute = newStart, endMinute = newEnd))
+        }
+    }
+
+    Panel {
+        Text(
+            "When Sleep runs. Bedtime is when the phone goes quiet; wake is when it " +
+                "comes back. Wake before bedtime is fine, it just means the window " +
+                "crosses midnight.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TimeOfDayField("Bedtime", bedtime) { m -> saveSleep(m, wake) }
+        TimeOfDayField("Wake up", wake) { m -> saveSleep(bedtime, m) }
+
+        Spacer(Modifier.height(4.dp))
+        Button(
+            onClick = {
+                // Handed to the Clock app: a real, daily, ringing alarm you can
+                // manage there. SKIP_UI creates it without opening the app.
+                val intent = android.content.Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
+                    .putExtra(android.provider.AlarmClock.EXTRA_HOUR, wake / 60)
+                    .putExtra(android.provider.AlarmClock.EXTRA_MINUTES, wake % 60)
+                    .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "Wake up")
+                    .putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+                    .putIntegerArrayListExtra(
+                        android.provider.AlarmClock.EXTRA_DAYS,
+                        arrayListOf(
+                            java.util.Calendar.MONDAY, java.util.Calendar.TUESDAY,
+                            java.util.Calendar.WEDNESDAY, java.util.Calendar.THURSDAY,
+                            java.util.Calendar.FRIDAY, java.util.Calendar.SATURDAY,
+                            java.util.Calendar.SUNDAY
+                        )
+                    )
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Set a daily alarm at %02d:%02d".format(wake / 60, wake % 60)) }
+        Text(
+            "Creates a repeating alarm in your Clock app. Change the wake time and " +
+                "tap again to add the new one; delete the old one in Clock.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** A clock as an HH:MM field, stored as minutes past midnight. */
+@Composable
+private fun TimeOfDayField(label: String, minutes: Int, onChange: (Int) -> Unit) {
+    var text by remember(minutes) { mutableStateOf("%02d:%02d".format(minutes / 60, minutes % 60)) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { next ->
+            text = next.filter { it.isDigit() || it == ':' }.take(5)
+            val parts = text.split(":")
+            if (parts.size == 2) {
+                val h = parts[0].toIntOrNull()
+                val m = parts[1].toIntOrNull()
+                if (h != null && m != null && h in 0..23 && m in 0..59) onChange(h * 60 + m)
+            }
+        },
+        label = { Text("$label (HH:MM)") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
