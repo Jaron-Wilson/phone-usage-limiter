@@ -234,6 +234,8 @@ private fun Home() {
     val highlight = remember(highlightPattern) {
         runCatching { Regex(highlightPattern) }.getOrNull()
     }
+    val agendaShowTomorrow by AppGraph.repo.settings.agendaShowTomorrow.collectAsState(initial = true)
+    val agendaTodayLimit by AppGraph.repo.settings.agendaTodayLimit.collectAsState(initial = 4)
 
     val events by produceState(initialValue = emptyList<CalEvent>()) {
         while (true) {
@@ -581,7 +583,7 @@ private fun Home() {
             // whole screen and never needs to scroll.
             if (!showAll && !editing) {
                 Spacer(Modifier.height(24.dp))
-                Agenda(events, calendarState, highlight, calendarPriority)
+                Agenda(events, calendarState, highlight, calendarPriority, agendaShowTomorrow, agendaTodayLimit)
             }
 
             Spacer(Modifier.height(28.dp))
@@ -905,7 +907,9 @@ private fun Agenda(
     events: List<CalEvent>,
     state: CalendarState,
     highlight: Regex?,
-    priority: List<Long>
+    priority: List<Long>,
+    showTomorrow: Boolean,
+    todayLimit: Int
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -1002,19 +1006,22 @@ private fun Agenda(
                 if (current == null && headline != null) list.filter { it != headline } else list
             }
 
-        if (restOfToday.isNotEmpty()) {
+        // Zero means "just what is happening": the headline above, nothing
+        // listed under it.
+        if (restOfToday.isNotEmpty() && todayLimit > 0) {
             Spacer(Modifier.height(14.dp))
-            EventList(restOfToday.take(4), highlight) { openEvent(context, it) }
+            EventList(restOfToday.take(todayLimit), highlight) { openEvent(context, it) }
         }
 
-        if (tomorrow.isNotEmpty()) {
+        if (showTomorrow && tomorrow.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Text("TOMORROW", fontSize = 11.sp, letterSpacing = 2.sp, color = InkFaint)
             Spacer(Modifier.height(6.dp))
-            EventList(tomorrow.take(4), highlight) { openEvent(context, it) }
-            if (tomorrow.size > 4) {
+            val tomorrowShown = if (todayLimit > 0) todayLimit else 3
+            EventList(tomorrow.take(tomorrowShown), highlight) { openEvent(context, it) }
+            if (tomorrow.size > tomorrowShown) {
                 Text(
-                    "and ${tomorrow.size - 4} more",
+                    "and ${tomorrow.size - tomorrowShown} more",
                     fontSize = 13.sp,
                     color = InkFaint,
                     modifier = Modifier.padding(top = 4.dp)

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -46,6 +47,8 @@ class SettingsStore(private val context: Context) {
         val DEFAULT_TRAVEL = longPreferencesKey("default_travel_minutes")
         val COMMUTE_ENABLED = booleanPreferencesKey("commute_enabled")
         val WORK_ALARMS_ENABLED = booleanPreferencesKey("work_alarms_enabled")
+        val AGENDA_SHOW_TOMORROW = booleanPreferencesKey("agenda_show_tomorrow")
+        val AGENDA_TODAY_LIMIT = intPreferencesKey("agenda_today_limit")
         val DESTINATIONS = stringPreferencesKey("destinations")
         val EDGE_LEFT = stringPreferencesKey("edge_left")
         val EDGE_RIGHT = stringPreferencesKey("edge_right")
@@ -166,6 +169,15 @@ class SettingsStore(private val context: Context) {
 
     val workAlarmsEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.WORK_ALARMS_ENABLED] ?: false }
     suspend fun setWorkAlarmsEnabled(v: Boolean) = edit { it[K.WORK_ALARMS_ENABLED] = v }
+
+    /** Whether the home screen shows tomorrow under today. */
+    val agendaShowTomorrow: Flow<Boolean> = context.dataStore.data.map { it[K.AGENDA_SHOW_TOMORROW] ?: true }
+    suspend fun setAgendaShowTomorrow(v: Boolean) = edit { it[K.AGENDA_SHOW_TOMORROW] = v }
+
+    /** How many of today's remaining items to list under the headline. 0 shows
+     *  only what is happening now or next. */
+    val agendaTodayLimit: Flow<Int> = context.dataStore.data.map { it[K.AGENDA_TODAY_LIMIT] ?: 4 }
+    suspend fun setAgendaTodayLimit(v: Int) = edit { it[K.AGENDA_TODAY_LIMIT] = v.coerceIn(0, 8) }
 
     val homeAddress: Flow<String> = context.dataStore.data.map { it[K.HOME_ADDRESS].orEmpty() }
     suspend fun setHomeAddress(v: String) = edit { it[K.HOME_ADDRESS] = v }
