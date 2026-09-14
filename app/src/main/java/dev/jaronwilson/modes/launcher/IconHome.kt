@@ -65,7 +65,10 @@ fun IconHome(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        // Tight enough that a full three rows of twelve fit under the day
+        // without scrolling. The old 18dp gap pushed the last row off the
+        // bottom edge.
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier.fillMaxWidth()
     ) {

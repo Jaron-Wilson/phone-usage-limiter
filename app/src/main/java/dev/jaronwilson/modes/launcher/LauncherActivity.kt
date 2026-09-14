@@ -586,7 +586,7 @@ private fun Home() {
                 Agenda(events, calendarState, highlight, calendarPriority, agendaShowTomorrow, agendaTodayLimit)
             }
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(18.dp))
 
             if (editing) {
                 Spacer(Modifier.height(18.dp))
