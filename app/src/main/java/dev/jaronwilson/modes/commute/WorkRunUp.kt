@@ -35,6 +35,10 @@ data class RunUp(
     val location: String
 )
 
+/** A work rule as the run-up cares about it: a title pattern and, optionally,
+ *  a single calendar it must come from. */
+data class WorkRule(val pattern: Regex, val calendarId: Long?)
+
 object WorkRunUp {
 
     const val LEAD_FIRST_MIN = 60L
@@ -42,14 +46,19 @@ object WorkRunUp {
 
     /**
      * The next work event, or null. Pure so the timing is testable without a
-     * calendar or a clock: an upcoming, timed event whose title matches one of
-     * the work patterns, earliest first.
+     * calendar or a clock: an upcoming, timed event whose title matches a work
+     * rule and, if that rule names a calendar, comes from it. Earliest first.
      */
-    fun nextWork(events: List<CalEvent>, now: Long, patterns: List<Regex>): RunUp? =
+    fun nextWork(events: List<CalEvent>, now: Long, rules: List<WorkRule>): RunUp? =
         events.asSequence()
             .filter { !it.allDay }
             .filter { it.begin > now }
-            .filter { event -> patterns.any { it.containsMatchIn(event.title) } }
+            .filter { event ->
+                rules.any { rule ->
+                    rule.pattern.containsMatchIn(event.title) &&
+                        (rule.calendarId == null || rule.calendarId == event.calendarId)
+                }
+            }
             .minByOrNull { it.begin }
             ?.let { RunUp(it.title, it.begin, it.location) }
 }
@@ -72,8 +81,8 @@ class WorkRunUpScheduler(private val context: Context) {
             AppGraph.scheduler.calendar.events(now, now + 36 * 60 * 60 * 1000L)
         }.getOrDefault(emptyList())
 
-        val patterns = workPatterns()
-        val runUp = WorkRunUp.nextWork(events, now, patterns)
+        val rules = workRules()
+        val runUp = WorkRunUp.nextWork(events, now, rules)
         if (runUp == null) {
             cancelAll()
             return
@@ -130,14 +139,15 @@ class WorkRunUpScheduler(private val context: Context) {
         runCatching { alarms.cancel(pendingFor(REQ_SECOND, "", "", 0, true)) }
     }
 
-    private suspend fun workPatterns(): List<Regex> {
-        val rules = runCatching { AppGraph.repo.ruleDao.activeCalendarRules() }
+    private suspend fun workRules(): List<WorkRule> {
+        val workRules = runCatching { AppGraph.repo.ruleDao.activeCalendarRules() }
             .getOrDefault(emptyList())
             .filter { it.modeId == Defaults.MODE_WORK }
-            .mapNotNull { it.titlePattern?.takeIf { p -> p.isNotBlank() } }
-        val raw = rules.ifEmpty { listOf(DEFAULT_WORK_PATTERN) }
-        return raw.mapNotNull { runCatching { Regex(it) }.getOrNull() }
-            .ifEmpty { listOf(Regex(DEFAULT_WORK_PATTERN)) }
+            .mapNotNull { rule ->
+                val p = rule.titlePattern?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                runCatching { Regex(p) }.getOrNull()?.let { WorkRule(it, rule.calendarId) }
+            }
+        return workRules.ifEmpty { listOf(WorkRule(Regex(DEFAULT_WORK_PATTERN), null)) }
     }
 
     private fun pendingFor(

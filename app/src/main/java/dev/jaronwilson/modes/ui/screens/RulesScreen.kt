@@ -652,10 +652,19 @@ fun RulesScreen() {
             Panel {
                 Text(
                     "Checked top to bottom. The first match wins, and a shorter event " +
-                        "beats a longer one it sits inside.",
+                        "beats a longer one it sits inside. Restrict a rule to one " +
+                        "calendar so a \"work party\" on your personal calendar cannot " +
+                        "switch you into Work.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                val ruleCalendars by produceState(initialValue = emptyList<Pair<Long, String>>()) {
+                    value = runCatching {
+                        AppGraph.scheduler.calendar.calendars()
+                            .filter { it.syncEvents }
+                            .map { it.id to it.name }
+                    }.getOrDefault(emptyList())
+                }
                 calendarRules.forEach { rule ->
                     RowItem(
                         title = rule.titlePattern?.takeIf { it.isNotBlank() }
@@ -672,6 +681,31 @@ fun RulesScreen() {
                             )
                         }
                     )
+                    if (ruleCalendars.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(
+                                selected = rule.calendarId == null,
+                                onClick = {
+                                    scope.launch {
+                                        AppGraph.repo.ruleDao.upsert(rule.copy(calendarId = null))
+                                    }
+                                },
+                                label = { Text("Any calendar") }
+                            )
+                            ruleCalendars.forEach { (id, name) ->
+                                FilterChip(
+                                    selected = rule.calendarId == id,
+                                    onClick = {
+                                        scope.launch {
+                                            AppGraph.repo.ruleDao.upsert(rule.copy(calendarId = id))
+                                        }
+                                    },
+                                    label = { Text(name) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                    }
                 }
             }
 
