@@ -49,6 +49,7 @@ class SettingsStore(private val context: Context) {
         val WORK_ALARMS_ENABLED = booleanPreferencesKey("work_alarms_enabled")
         val AGENDA_SHOW_TOMORROW = booleanPreferencesKey("agenda_show_tomorrow")
         val AGENDA_TODAY_LIMIT = intPreferencesKey("agenda_today_limit")
+        val WAKE_ALARM_ENABLED = booleanPreferencesKey("wake_alarm_enabled")
         val DESTINATIONS = stringPreferencesKey("destinations")
         val EDGE_LEFT = stringPreferencesKey("edge_left")
         val EDGE_RIGHT = stringPreferencesKey("edge_right")
@@ -178,6 +179,10 @@ class SettingsStore(private val context: Context) {
      *  only what is happening now or next. */
     val agendaTodayLimit: Flow<Int> = context.dataStore.data.map { it[K.AGENDA_TODAY_LIMIT] ?: 4 }
     suspend fun setAgendaTodayLimit(v: Int) = edit { it[K.AGENDA_TODAY_LIMIT] = v.coerceIn(0, 8) }
+
+    /** Whether Modes rings its own wake alarm at the Sleep wake time. */
+    val wakeAlarmEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.WAKE_ALARM_ENABLED] ?: false }
+    suspend fun setWakeAlarmEnabled(v: Boolean) = edit { it[K.WAKE_ALARM_ENABLED] = v }
 
     val homeAddress: Flow<String> = context.dataStore.data.map { it[K.HOME_ADDRESS].orEmpty() }
     suspend fun setHomeAddress(v: String) = edit { it[K.HOME_ADDRESS] = v }

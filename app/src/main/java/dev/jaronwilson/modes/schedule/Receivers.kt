@@ -48,6 +48,7 @@ class BootReceiver : BroadcastReceiver() {
                 AppGraph.scheduler.scheduleNextDigest()
                 AppGraph.scheduler.ensurePeriodicSync()
                 dev.jaronwilson.modes.commute.WorkRunUpScheduler(context).scheduleNext()
+                dev.jaronwilson.modes.alarm.WakeAlarm.sync(context)
             } catch (t: Throwable) {
                 Log.w("BootReceiver", "boot handling failed", t)
             } finally {

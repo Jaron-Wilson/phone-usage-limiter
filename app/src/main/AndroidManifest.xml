@@ -16,6 +16,13 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- The wake alarm is ours: it rings over the lock screen with a full-screen
+         alarm, which needs this. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- The alarm rings from a foreground service so the sound never depends on
+         a screen taking over. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- To repair a calendar account that Android reports as enabled while
          refusing to sync it. Both are install-time permissions. -->
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
@@ -167,6 +174,28 @@
         <receiver
             android:name=".commute.WorkAlarmReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".alarm.WakeAlarmReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name=".alarm.AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.Modes" />
+
+        <service
+            android:name=".alarm.AlarmService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="An alarm ringing until the user dismisses it" />
+        </service>
 
         <receiver
             android:name=".notify.DigestActionReceiver"

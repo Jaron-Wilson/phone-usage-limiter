@@ -51,12 +51,27 @@ class ModesApp : Application() {
                 setShowBadge(false)
             }
         )
+        nm.createNotificationChannel(
+            NotificationChannel(
+                CH_ALARM,
+                "Wake alarm",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "The wake alarm ringing over the lock screen."
+                // The full-screen alarm does the sound; the notification itself
+                // stays quiet so nothing double-rings.
+                setSound(null, null)
+                enableVibration(false)
+                setBypassDnd(true)
+            }
+        )
     }
 
     companion object {
         const val CH_DIGEST = "digest"
         const val CH_STATUS = "status"
         const val CH_COMMUTE = "commute"
+        const val CH_ALARM = "alarm"
     }
 }
 

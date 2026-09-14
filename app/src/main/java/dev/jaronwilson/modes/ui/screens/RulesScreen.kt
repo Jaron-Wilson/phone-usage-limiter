@@ -1072,6 +1072,9 @@ private fun SleepSchedule(timeRules: List<dev.jaronwilson.modes.core.model.TimeR
                 note = "Sleep"
             )
             AppGraph.repo.ruleDao.upsert(base.copy(startMinute = newStart, endMinute = newEnd))
+            // The wake alarm rides the Sleep wake time, so re-arm it when that
+            // time moves.
+            dev.jaronwilson.modes.alarm.WakeAlarm.sync(context)
         }
     }
 
@@ -1087,36 +1090,48 @@ private fun SleepSchedule(timeRules: List<dev.jaronwilson.modes.core.model.TimeR
         TimeOfDayField("Wake up", wake) { m -> saveSleep(bedtime, m) }
 
         Spacer(Modifier.height(4.dp))
-        Button(
-            onClick = {
-                // Opens the Clock app with a daily alarm at the wake time filled
-                // in, for you to save. Not silent on purpose: creating it
-                // silently could reuse an old disabled alarm and leave it off,
-                // so it would never ring. This way you see it is on.
-                val intent = android.content.Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
-                    .putExtra(android.provider.AlarmClock.EXTRA_HOUR, wake / 60)
-                    .putExtra(android.provider.AlarmClock.EXTRA_MINUTES, wake % 60)
-                    .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "Wake up")
-                    .putIntegerArrayListExtra(
-                        android.provider.AlarmClock.EXTRA_DAYS,
-                        arrayListOf(
-                            java.util.Calendar.MONDAY, java.util.Calendar.TUESDAY,
-                            java.util.Calendar.WEDNESDAY, java.util.Calendar.THURSDAY,
-                            java.util.Calendar.FRIDAY, java.util.Calendar.SATURDAY,
-                            java.util.Calendar.SUNDAY
-                        )
-                    )
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { context.startActivity(intent) }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Set a daily alarm at %02d:%02d".format(wake / 60, wake % 60)) }
+        val wakeAlarmOn by AppGraph.repo.settings.wakeAlarmEnabled.collectAsState(initial = false)
+        SwitchRow(
+            title = "Ring a wake alarm at %02d:%02d".format(wake / 60, wake % 60),
+            subtitle = "Modes rings it over the lock screen. Switch off to remove it.",
+            checked = wakeAlarmOn,
+            onChange = { v ->
+                scope.launch {
+                    AppGraph.repo.settings.setWakeAlarmEnabled(v)
+                    dev.jaronwilson.modes.alarm.WakeAlarm.sync(context)
+                }
+            }
+        )
         Text(
-            "Opens your Clock app with a daily alarm at this time. Check it is " +
-                "switched on and save. Manage or delete it there like any alarm.",
+            "This alarm is the app's own, so it can both set and remove it, on " +
+                "every day Sleep covers. Change the wake time above and it moves " +
+                "with it. It rings and can be silenced from its notification even " +
+                "when the screen is off.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (wakeAlarmOn && android.os.Build.VERSION.SDK_INT >= 34) {
+            val nm = context.getSystemService(android.app.NotificationManager::class.java)
+            val canFullScreen = runCatching { nm.canUseFullScreenIntent() }.getOrDefault(true)
+            if (!canFullScreen) {
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                android.net.Uri.parse("package:" + context.packageName)
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }) { Text("Let the alarm show over the lock screen") }
+                Text(
+                    "Optional. Without it the alarm still rings; with it the alarm " +
+                        "screen also takes over when the phone is locked.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
