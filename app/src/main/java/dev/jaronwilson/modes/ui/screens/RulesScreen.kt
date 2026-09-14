@@ -1089,13 +1089,14 @@ private fun SleepSchedule(timeRules: List<dev.jaronwilson.modes.core.model.TimeR
         Spacer(Modifier.height(4.dp))
         Button(
             onClick = {
-                // Handed to the Clock app: a real, daily, ringing alarm you can
-                // manage there. SKIP_UI creates it without opening the app.
+                // Opens the Clock app with a daily alarm at the wake time filled
+                // in, for you to save. Not silent on purpose: creating it
+                // silently could reuse an old disabled alarm and leave it off,
+                // so it would never ring. This way you see it is on.
                 val intent = android.content.Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
                     .putExtra(android.provider.AlarmClock.EXTRA_HOUR, wake / 60)
                     .putExtra(android.provider.AlarmClock.EXTRA_MINUTES, wake % 60)
                     .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "Wake up")
-                    .putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
                     .putIntegerArrayListExtra(
                         android.provider.AlarmClock.EXTRA_DAYS,
                         arrayListOf(
@@ -1111,8 +1112,8 @@ private fun SleepSchedule(timeRules: List<dev.jaronwilson.modes.core.model.TimeR
             modifier = Modifier.fillMaxWidth()
         ) { Text("Set a daily alarm at %02d:%02d".format(wake / 60, wake % 60)) }
         Text(
-            "Creates a repeating alarm in your Clock app. Change the wake time and " +
-                "tap again to add the new one; delete the old one in Clock.",
+            "Opens your Clock app with a daily alarm at this time. Check it is " +
+                "switched on and save. Manage or delete it there like any alarm.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
