@@ -192,18 +192,18 @@ class WorkAlarmReceiver : BroadcastReceiver() {
                 if (navigate) "30 minutes to $title" else "1 hour to $title"
             )
             .setContentText(
-                if (navigate) "Opening the drive to $destination" else destination
+                if (navigate) "Tap to drive to $destination" else destination
             )
             .setContentIntent(navPending)
-            .setCategory(Notification.CATEGORY_ALARM)
+            // A reminder, not an alarm. CATEGORY_ALARM with a full-screen intent
+            // made some phones ring this like a clock alarm: a solid buzz for
+            // minutes until it timed out. A reminder buzzes once.
+            .setCategory(Notification.CATEGORY_REMINDER)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
 
         if (navigate) {
-            // A full-screen intent is the one way an alarm may open something on
-            // its own from the background, the same mechanism a clock alarm
-            // uses. It launches the drive even with the screen off or locked.
-            builder.setFullScreenIntent(navPending, true)
             builder.addAction(
                 Notification.Action.Builder(
                     null as android.graphics.drawable.Icon?, "Navigate", navPending
@@ -213,11 +213,12 @@ class WorkAlarmReceiver : BroadcastReceiver() {
 
         runCatching { nm.notify(WorkRunUpScheduler.NOTIFICATION_ID + minutes.toInt(), builder.build()) }
 
-        // Best effort: some devices still allow the direct launch; where they do
-        // not, the full-screen intent above carries it.
+        // Best effort: where a phone allows an app to launch from the background
+        // the drive opens on its own; where it does not, the notification opens
+        // it in one tap. Either way it never rings.
         if (navigate) {
             runCatching { context.startActivity(CommuteScheduler.navigationIntent(destination)) }
-                .onFailure { Log.i("WorkRunUp", "direct nav launch blocked, full-screen intent will carry it") }
+                .onFailure { Log.i("WorkRunUp", "direct nav launch blocked, use the notification") }
         }
 
         val pending = goAsync()

@@ -16,9 +16,6 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-    <!-- So the 30-minutes-to-work alarm can open the drive on its own, the way
-         a clock alarm shows its screen. Only used for that. -->
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- To repair a calendar account that Android reports as enabled while
          refusing to sync it. Both are install-time permissions. -->
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
