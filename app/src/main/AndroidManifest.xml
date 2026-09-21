@@ -230,6 +230,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Provisioning over adb, so the 43-character token never has to be
+             typed. Exported for the same reason ExportReceiver above is, and
+             with the same caveat: it can set a token but never read one. -->
+        <receiver
+            android:name=".remote.ProvisionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.jaronwilson.modes.SET_REMOTE_TOKEN" />
+            </intent-filter>
+        </receiver>
+
         <!-- Not exported: nothing on the device may start or bind this. It is
              reached only over the network, and only with the token. -->
         <service
