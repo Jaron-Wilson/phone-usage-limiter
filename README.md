@@ -531,6 +531,49 @@ takes effect on the very next one.
 The byte layout is unit tested, because its failure mode is silent: one byte
 wrong and the tap simply does nothing, with no error anywhere to read.
 
+## Remote control
+
+**Rules > Remote control** lets your own server open apps on this phone. It is
+off until you save a token and flip the switch, and it will not turn on
+without one: a listening port with no secret would let anything on the network
+launch whatever it liked.
+
+A push notification cannot do this. A push wakes the *browser*, and a browser
+cannot start another app. Something has to be running on the phone to act, and
+this is the smallest version of that: no third-party automation app to install,
+and no wireless debugging left switched on for every network you join.
+
+It listens on port 8778 and speaks a single endpoint:
+
+    POST /command
+    Authorization: Bearer <token>
+
+    {"command": "open_app", "params": {"package": "com.bambulab.bambuhandy"}}
+
+`ping`, `list_apps`, `open_app`, `open_url`, `install_app`, `notify` and
+`speak` are the whole vocabulary. Every other request is refused by name, so a
+typo reads as a typo rather than as silence.
+
+It runs as a foreground service, which is not a style choice: Android stops
+background services quickly, and flatly forbids a background process from
+starting an activity, which is the one thing this exists to do. The ongoing
+notification is the price, and it doubles as the only honest way to tell at a
+glance that the phone is listening.
+
+Reachability is Tailscale's problem, not the app's. The socket binds every
+interface because the phone's tailnet address comes and goes with the VPN, and
+rebinding on each change would be a lot of machinery to get subtly wrong. The
+token is what makes that safe, and it is compared in constant time, because the
+alternative leaks it one byte at a time to anyone patient.
+
+**Installing an app still needs your thumb.** `install_app` opens the Play
+Store page and stops there. Android does not allow silent installs, which is
+worth being glad about, and the response says so explicitly so the thing at the
+other end cannot report an app as installed when it has merely been offered.
+
+The wire format is unit tested — parsing and the token check especially —
+because those are the parts where a mistake is both invisible and serious.
+
 ## Always on
 
 **No app can replace Android's always-on display.** That belongs to the system

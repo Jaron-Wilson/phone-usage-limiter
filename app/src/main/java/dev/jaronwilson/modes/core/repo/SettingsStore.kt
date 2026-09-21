@@ -39,6 +39,8 @@ class SettingsStore(private val context: Context) {
         val SEEDED = booleanPreferencesKey("seeded")
         val SETUP_DONE = booleanPreferencesKey("setup_done")
         val LAST_DIGEST = longPreferencesKey("last_digest")
+        val REMOTE_ENABLED = booleanPreferencesKey("remote_enabled")
+        val REMOTE_TOKEN = stringPreferencesKey("remote_token")
         val AGENDA_HIGHLIGHT = stringPreferencesKey("agenda_highlight")
         val ALWAYS_ALLOWED = stringPreferencesKey("always_allowed")
         val HOME_ADDRESS = stringPreferencesKey("home_address")
@@ -261,6 +263,19 @@ class SettingsStore(private val context: Context) {
 
     suspend fun lastDigestAt(): Long = context.dataStore.data.first()[K.LAST_DIGEST] ?: 0L
     suspend fun setLastDigestAt(v: Long) = edit { it[K.LAST_DIGEST] = v }
+
+    // Remote control. Off by default and staying that way: this one opens a
+    // port, so it has to be a deliberate act rather than something that
+    // arrives switched on in an update.
+    val remoteEnabled: Flow<Boolean> = context.dataStore.data.map { it[K.REMOTE_ENABLED] ?: false }
+    suspend fun isRemoteEnabled(): Boolean =
+        context.dataStore.data.first()[K.REMOTE_ENABLED] ?: false
+    suspend fun setRemoteEnabled(v: Boolean) = edit { it[K.REMOTE_ENABLED] = v }
+
+    /** The shared secret Odysseus sends. Empty means the listener refuses to start. */
+    val remoteTokenFlow: Flow<String> = context.dataStore.data.map { it[K.REMOTE_TOKEN] ?: "" }
+    suspend fun remoteToken(): String = context.dataStore.data.first()[K.REMOTE_TOKEN] ?: ""
+    suspend fun setRemoteToken(v: String) = edit { it[K.REMOTE_TOKEN] = v.trim() }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
