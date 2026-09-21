@@ -130,4 +130,9 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation("junit:junit:4.13.2")
+    // Android ships org.json, but the JVM unit-test classpath gets a stub
+    // whose every method throws "not mocked". The real implementation here is
+    // test-only, so nothing is added to the APK; without it the wire-format
+    // tests cannot run at all.
+    testImplementation("org.json:json:20240303")
 }

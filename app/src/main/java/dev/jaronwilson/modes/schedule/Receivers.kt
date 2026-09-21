@@ -6,6 +6,7 @@ import android.content.Intent
 import android.util.Log
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.notify.DigestPublisher
+import dev.jaronwilson.modes.remote.RemoteControlService
 import kotlinx.coroutines.launch
 
 /** Fired at a scheduled mode boundary or digest window. */
@@ -47,6 +48,12 @@ class BootReceiver : BroadcastReceiver() {
                 AppGraph.scheduler.scheduleNextBoundary()
                 AppGraph.scheduler.scheduleNextDigest()
                 AppGraph.scheduler.ensurePeriodicSync()
+                // A listener that does not survive a reboot is worse than no
+                // listener: it works right up until the phone restarts, then
+                // fails in a way that looks like the network.
+                if (AppGraph.repo.settings.isRemoteEnabled()) {
+                    RemoteControlService.start(context)
+                }
             } catch (t: Throwable) {
                 Log.w("BootReceiver", "boot handling failed", t)
             } finally {

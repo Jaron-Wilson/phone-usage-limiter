@@ -59,6 +59,7 @@ import dev.jaronwilson.modes.ui.Prose
 import dev.jaronwilson.modes.ui.SwitchRow
 import dev.jaronwilson.modes.ui.RowItem
 import dev.jaronwilson.modes.ui.ScreenScaffold
+import dev.jaronwilson.modes.remote.RemoteControlService
 import dev.jaronwilson.modes.ui.SectionHeader
 import androidx.compose.runtime.produceState
 import kotlinx.coroutines.launch
@@ -286,6 +287,65 @@ fun RulesScreen() {
                             context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NFC_SETTINGS))
                         }
                     }
+                )
+            }
+
+            SectionHeader("Remote control")
+            Panel {
+                Prose(
+                    "Lets your own server on your tailnet open apps on this phone. " +
+                        "Nothing else can: every request has to carry the token below, " +
+                        "and without one the phone refuses to listen at all."
+                )
+                val remoteOn by AppGraph.repo.settings.remoteEnabled.collectAsState(initial = false)
+                val remoteToken by AppGraph.repo.settings.remoteTokenFlow.collectAsState(initial = "")
+                var tokenDraft by remember(remoteToken) { mutableStateOf(remoteToken) }
+                OutlinedTextField(
+                    value = tokenDraft,
+                    onValueChange = { tokenDraft = it },
+                    label = { Text("Token from Odysseus → Settings → Devices") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                PrimaryButton(
+                    text = "Save token",
+                    enabled = tokenDraft.isNotBlank() && tokenDraft != remoteToken,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { scope.launch { AppGraph.repo.settings.setRemoteToken(tokenDraft) } }
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Listen on port ${RemoteControlService.PORT}", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = remoteOn,
+                        // Deliberately not switchable until a token is saved:
+                        // an open port with no secret would let anything on the
+                        // network launch apps here.
+                        enabled = remoteToken.isNotBlank(),
+                        onCheckedChange = { want ->
+                            scope.launch {
+                                AppGraph.repo.settings.setRemoteEnabled(want)
+                                if (want) RemoteControlService.start(context)
+                                else RemoteControlService.stop(context)
+                            }
+                        }
+                    )
+                }
+                Prose(
+                    if (remoteToken.isBlank())
+                        "Save a token first. Until then the switch stays off and the " +
+                            "phone will not open a port."
+                    else
+                        "While this is on you will see an ongoing notification. That is " +
+                            "required, and it is also how you can tell at a glance that " +
+                            "the phone is listening."
+                )
+                Prose(
+                    "Installing an app still needs a tap from you: the assistant can " +
+                        "open the Play Store page, and nothing more. Android does not " +
+                        "allow silent installs, which is worth being glad about."
                 )
             }
 
