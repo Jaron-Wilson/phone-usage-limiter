@@ -1,21 +1,27 @@
 # Reels Gone
 
-An Xposed / LSPatch module that removes Instagram's doom-scroll surfaces from
-the inside. Our own code, no third-party Instagram mod.
+An Xposed / LSPatch module that removes short-form video from Instagram and
+YouTube from the inside. Our own code, no third-party app mod.
 
 ## What it hides
 
+Instagram (`com.instagram.android`):
 - The **Reels tab** in the bottom bar (`clips_tab`).
 - The **reels tray** in the home feed (`reels_tray_container`).
 - The **Explore grid**, but only on the Explore screen, so the search bar still
   works. It hides `recycler_view` when `explore_action_bar` is present.
 
-It is scoped to `com.instagram.android` and touches nothing else. It works by
-finding Instagram's own view ids and setting those views gone on every screen
-change, so it needs no understanding of Instagram's obfuscated code. If
-Instagram renames an id, edit the strings in `ReelsGone.kt`.
+YouTube (`com.google.android.youtube`):
+- The **Shorts tab** in the bottom bar, matched by its "Shorts" label because it
+  carries no resource id.
 
-Reels inside direct messages still play; those are videos in a chat, not a feed.
+It is scoped to those two packages and touches nothing else. It works by
+finding each app's own view ids and labels and setting those views gone on every
+screen change, so it needs no understanding of the apps' obfuscated code. If
+either app renames something, edit the strings in `ReelsGone.kt`.
+
+Short videos inside a chat or a search result still play; only the push
+surfaces, the tabs and shelves, are removed.
 
 ## Why a module, not a patched APK
 

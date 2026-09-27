@@ -2,5 +2,6 @@
 <resources>
     <string-array name="xposed_scope">
         <item>com.instagram.android</item>
+        <item>com.google.android.youtube</item>
     </string-array>
 </resources>
