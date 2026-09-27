@@ -133,6 +133,46 @@ fun ModeEditScreen(modeId: String, onDone: () -> Unit, onEditHome: () -> Unit) {
                         }
                     }
                 )
+                Text(
+                    "Instagram and YouTube are also stopped in a browser when set " +
+                        "aside, so the website is not a way around it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            SectionHeader("Daily limits")
+            Panel {
+                Text(
+                    "Once you have spent this long in an app today it gets sent " +
+                        "home for the rest of the day. Needs usage access.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                var limitQuery by remember { mutableStateOf("") }
+                AppPicker(
+                    apps = apps,
+                    style = HomeStyle.ICONS,
+                    query = limitQuery,
+                    onQueryChange = { limitQuery = it },
+                    selected = current.dailyLimits.keys,
+                    palette = PickerPalette.APP,
+                    placeholder = "Find an app to cap",
+                    onPick = { app ->
+                        val on = app.packageName in current.dailyLimits
+                        update { m ->
+                            m.copy(
+                                dailyLimits = if (on) m.dailyLimits - app.packageName
+                                else m.dailyLimits + (app.packageName to 30)
+                            )
+                        }
+                    }
+                )
+                current.dailyLimits.forEach { (pkg, minutes) ->
+                    NumberRow("${AppList.label(context, pkg)}, minutes a day", minutes) { v ->
+                        update { it.copy(dailyLimits = it.dailyLimits + (pkg to v)) }
+                    }
+                }
             }
 
             SectionHeader("Home screen")

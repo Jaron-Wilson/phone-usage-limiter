@@ -119,6 +119,12 @@ data class Mode(
     val speedbumpSeconds: Int = 10,
     /** How long an "open anyway" pass lasts, in minutes. */
     val passMinutes: Int = 5,
+    /**
+     * Per-app daily ceilings, package -> minutes. Once an app has been in the
+     * foreground this many minutes today it is guarded for the rest of the day,
+     * the same as if it were set aside. Needs usage access. Empty means no caps.
+     */
+    val dailyLimits: Map<String, Int> = emptyMap(),
 
     // ---- do not disturb ----
     /** One of NotificationManager.INTERRUPTION_FILTER_*. 0 means "leave DND alone". */
