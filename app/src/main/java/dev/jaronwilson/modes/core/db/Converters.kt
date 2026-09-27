@@ -46,6 +46,23 @@ class Converters {
         if (value.isBlank()) emptyList()
         else value.split(",").mapNotNull { it.trim().toLongOrNull() }
 
+    // package -> int, one "pkg=value" pair per line. Package names contain
+    // neither '=' nor a newline, so this round-trips safely.
+    @TypeConverter
+    fun stringIntMapToDb(value: Map<String, Int>): String =
+        value.entries.joinToString(sep) { "${it.key}=${it.value}" }
+
+    @TypeConverter
+    fun dbToStringIntMap(value: String): Map<String, Int> =
+        if (value.isEmpty()) emptyMap()
+        else value.split(sep).mapNotNull { line ->
+            val i = line.lastIndexOf('=')
+            if (i <= 0) null else {
+                val n = line.substring(i + 1).trim().toIntOrNull() ?: return@mapNotNull null
+                line.substring(0, i) to n
+            }
+        }.toMap()
+
     @TypeConverter
     fun classSetToDb(value: Set<NotifClass>): String = value.joinToString(",") { it.name }
 

@@ -33,7 +33,7 @@ import dev.jaronwilson.modes.core.model.Vip
         AppPass::class,
         Place::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -77,6 +77,13 @@ abstract class ModesDatabase : RoomDatabase() {
             }
         }
 
+        /** Per-app daily usage caps arrive as one column on the modes table. */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE modes ADD COLUMN dailyLimits TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: ModesDatabase? = null
 
@@ -86,7 +93,7 @@ abstract class ModesDatabase : RoomDatabase() {
                 ModesDatabase::class.java,
                 "modes.db"
             )
-                .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .fallbackToDestructiveMigration()
                 .build()
                 .also { instance = it }

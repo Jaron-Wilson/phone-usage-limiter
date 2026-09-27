@@ -42,6 +42,9 @@ object GuardPolicy {
      *   list, which is why an app in no folder is an app you cannot open.
      * @param isLaunchable whether the package is something you could have
      *   opened deliberately. Keeps the pause off share sheets and the like.
+     * @param overLimitToday packages that have already used up their daily cap.
+     *   Treated like the set-aside list: stopped whatever the scope, but still
+     *   subject to the exceptions above (money, essentials, always-allowed).
      */
     fun shouldGuard(
         pkg: String,
@@ -49,7 +52,8 @@ object GuardPolicy {
         mode: Mode,
         homePackages: Set<String>,
         isLaunchable: (String) -> Boolean,
-        alwaysAllowed: Set<String> = emptySet()
+        alwaysAllowed: Set<String> = emptySet(),
+        overLimitToday: Set<String> = emptySet()
     ): Boolean {
         if (mode.guardMode == GuardMode.OFF) return false
         if (pkg == ownPackage) return false
@@ -63,6 +67,8 @@ object GuardPolicy {
 
         // Explicitly set aside: always stopped, whatever the scope.
         if (pkg in mode.blockedPackages) return true
+        // Over its daily ceiling: stopped for the rest of the day, whatever the scope.
+        if (pkg in overLimitToday) return true
         if (mode.guardScope == GuardScope.BLOCKLIST) return false
 
         if (pkg in mode.allowedPackages) return false

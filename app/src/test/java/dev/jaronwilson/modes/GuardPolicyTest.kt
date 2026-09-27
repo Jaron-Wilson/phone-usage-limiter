@@ -72,6 +72,32 @@ class GuardPolicyTest {
         assertTrue(guarded(Pkg.INSTAGRAM, m, home = setOf(Pkg.INSTAGRAM)))
     }
 
+    // ---- daily limits ----
+
+    @Test
+    fun `an app over its daily limit is stopped even under blocklist`() {
+        val m = mode(scope = GuardScope.BLOCKLIST)
+        // Not on the blocklist, so untouched until the cap is spent.
+        assertFalse(guarded(Pkg.INSTAGRAM, m))
+        assertTrue(
+            GuardPolicy.shouldGuard(
+                Pkg.INSTAGRAM, own, m, emptySet(), launchable,
+                overLimitToday = setOf(Pkg.INSTAGRAM)
+            )
+        )
+    }
+
+    @Test
+    fun `a spent daily limit still exempts money apps`() {
+        val m = mode(guard = GuardMode.BLOCK)
+        assertFalse(
+            GuardPolicy.shouldGuard(
+                Pkg.CHASE, own, m, emptySet(), launchable,
+                overLimitToday = setOf(Pkg.CHASE)
+            )
+        )
+    }
+
     // ---- the ways this could trap you, which it must not ----
 
     @Test
