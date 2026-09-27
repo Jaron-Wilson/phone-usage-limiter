@@ -53,6 +53,15 @@ class ModesApp : Application() {
         )
         nm.createNotificationChannel(
             NotificationChannel(
+                CH_REMOTE,
+                "From your server",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Messages your own server sends, like a reply being ready. Tap to open."
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(
                 CH_ALARM,
                 "Wake alarm",
                 NotificationManager.IMPORTANCE_HIGH
@@ -72,6 +81,7 @@ class ModesApp : Application() {
         const val CH_STATUS = "status"
         const val CH_COMMUTE = "commute"
         const val CH_ALARM = "alarm"
+        const val CH_REMOTE = "remote"
     }
 }
 
