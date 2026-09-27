@@ -1,6 +1,7 @@
 package dev.jaronwilson.modes.remote
 
 import android.app.Notification
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -212,11 +213,21 @@ class RemoteControlService : Service() {
 
             "notify", "speak" -> {
                 val text = params.optString("text").ifBlank { params.optString("message") }
+                // Optional: a link opened when the notification is tapped (the
+                // chat a finished reply is in), and a title. A notification
+                // with no tap action did nothing when tapped.
+                val url = params.optString("url")
+                val link = url.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                val title = params.optString("title").ifBlank { "Modes" }
                 if (text.isBlank()) {
                     CommandProtocol.error(400, "Bad Request", "params.text is required")
+                } else if (url.isNotBlank() && link == null) {
+                    CommandProtocol.error(400, "Bad Request", "params.url must be http(s)")
                 } else {
-                    notify(text)
-                    CommandProtocol.ok(JSONObject().put("ok", true).put("shown", text))
+                    notify(text, title, link)
+                    val out = JSONObject().put("ok", true).put("shown", text)
+                    if (link != null) out.put("opens", link)
+                    CommandProtocol.ok(out)
                 }
             }
 
@@ -231,15 +242,22 @@ class RemoteControlService : Service() {
         }
     }
 
-    private fun notify(text: String) {
-        val n = Notification.Builder(this, ModesApp.CH_STATUS)
+    private fun notify(text: String, title: String = "Modes", link: String? = null) {
+        val id = (title + text).hashCode()
+        val b = Notification.Builder(this, ModesApp.CH_REMOTE)
             .setSmallIcon(R.drawable.ic_stat_modes)
-            .setContentTitle("Modes")
+            .setContentTitle(title)
             .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setAutoCancel(true)
-            .build()
-        getSystemService(android.app.NotificationManager::class.java)
-            .notify(text.hashCode(), n)
+        if (link != null) {
+            val open = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            b.setContentIntent(PendingIntent.getActivity(
+                this, id, open,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        }
+        getSystemService(android.app.NotificationManager::class.java).notify(id, b.build())
     }
 
     private fun buildNotification(): Notification =
