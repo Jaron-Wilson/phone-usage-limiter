@@ -13,6 +13,7 @@ import android.util.Log
 import dev.jaronwilson.modes.AppGraph
 import dev.jaronwilson.modes.ModesApp
 import dev.jaronwilson.modes.R
+import dev.jaronwilson.modes.guard.AppGuardService
 import dev.jaronwilson.modes.launcher.AppList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -231,9 +232,109 @@ class RemoteControlService : Service() {
                 }
             }
 
+            "foreground_app", "read_screen", "screenshot",
+            "tap", "type_text", "swipe", "scroll", "press_key" ->
+                screenCommand(command, params)
+
             else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
         }
     }
+
+    /**
+     * The screen-control commands, all of which need the accessibility guard to
+     * be running. Kept together because they share that one precondition and the
+     * same failure when it is off.
+     */
+    private fun screenCommand(command: String, params: JSONObject): String {
+        val svc = AppGuardService.instance
+            ?: return CommandProtocol.error(409, "Conflict",
+                "the Modes app guard (accessibility) is off; turn it on to read or " +
+                    "control the screen")
+        return when (command) {
+            "foreground_app" -> CommandProtocol.ok(
+                JSONObject().put("ok", true).put("package", UiControl.foreground(svc)))
+
+            "read_screen" -> CommandProtocol.ok(
+                JSONObject().put("ok", true)
+                    .put("package", UiControl.foreground(svc))
+                    .put("elements", UiControl.dump(svc)))
+
+            "screenshot" -> {
+                val b64 = UiControl.screenshotBase64(svc)
+                if (b64 == null) {
+                    CommandProtocol.error(500, "Internal Server Error",
+                        "screenshot failed; the screen may be off or protected")
+                } else {
+                    CommandProtocol.ok(JSONObject().put("ok", true)
+                        .put("format", "png").put("base64", b64))
+                }
+            }
+
+            "tap" -> {
+                val text = params.optString("text").trim()
+                val done = if (text.isNotEmpty()) {
+                    UiControl.tapText(svc, text)
+                } else if (params.has("x") && params.has("y")) {
+                    UiControl.tap(svc, params.optInt("x"), params.optInt("y"))
+                } else {
+                    return CommandProtocol.error(400, "Bad Request",
+                        "tap needs params.text, or params.x and params.y")
+                }
+                actionResult(done, if (text.isNotEmpty()) "no match for '$text' on screen"
+                    else "tap not dispatched")
+            }
+
+            "type_text" -> {
+                val text = params.optString("text")
+                if (text.isEmpty()) {
+                    CommandProtocol.error(400, "Bad Request", "params.text is required")
+                } else {
+                    actionResult(UiControl.typeText(svc, text), "no editable field is focused")
+                }
+            }
+
+            "swipe" -> {
+                val keys = listOf("x1", "y1", "x2", "y2")
+                if (!keys.all { params.has(it) }) {
+                    CommandProtocol.error(400, "Bad Request", "swipe needs x1, y1, x2, y2")
+                } else {
+                    actionResult(
+                        UiControl.swipe(svc, params.optInt("x1"), params.optInt("y1"),
+                            params.optInt("x2"), params.optInt("y2"),
+                            params.optInt("duration_ms", 300)),
+                        "swipe not dispatched")
+                }
+            }
+
+            "scroll" -> {
+                val dir = params.optString("direction").trim()
+                if (dir.isEmpty()) {
+                    CommandProtocol.error(400, "Bad Request",
+                        "params.direction must be up, down, left or right")
+                } else {
+                    actionResult(
+                        UiControl.scroll(svc, dir, params.optDouble("amount", 0.6).toFloat()),
+                        "scroll not dispatched; check direction")
+                }
+            }
+
+            "press_key" -> {
+                val name = params.optString("key").trim()
+                if (name.isEmpty()) {
+                    CommandProtocol.error(400, "Bad Request",
+                        "params.key must be back, home or recents")
+                } else {
+                    actionResult(UiControl.key(svc, name), "unknown key '$name'")
+                }
+            }
+
+            else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
+        }
+    }
+
+    private fun actionResult(done: Boolean, failMessage: String): String =
+        if (done) CommandProtocol.ok(JSONObject().put("ok", true))
+        else CommandProtocol.error(422, "Unprocessable Entity", failMessage)
 
     private fun view(uri: String) {
         runCatching {

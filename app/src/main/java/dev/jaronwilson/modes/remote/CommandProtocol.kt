@@ -19,6 +19,9 @@ object CommandProtocol {
     /** What the listener will act on. Anything else is refused by name. */
     val SUPPORTED = setOf(
         "ping", "open_app", "open_url", "list_apps", "install_app", "notify", "speak",
+        // Screen control, backed by the accessibility guard.
+        "read_screen", "screenshot", "foreground_app",
+        "tap", "type_text", "swipe", "scroll", "press_key",
     )
 
     data class Request(
