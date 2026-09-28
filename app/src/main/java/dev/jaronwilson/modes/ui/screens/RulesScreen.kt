@@ -366,8 +366,19 @@ fun RulesScreen() {
                 val igUrl by AppGraph.repo.settings.limitedIgUrl.collectAsState(initial = "")
                 var urlDraft by remember(igUrl) { mutableStateOf(igUrl) }
                 var installStatus by remember { mutableStateOf("") }
-                var installing by remember { mutableStateOf(false) }
-                var installProgress by remember { mutableFloatStateOf(0f) }
+                var downloading by remember { mutableStateOf(false) }
+                var downloadProgress by remember { mutableFloatStateOf(0f) }
+                // Staged APKs from a finished download, ready for a fresh Install tap.
+                var staged by remember { mutableStateOf<List<java.io.File>?>(null) }
+
+                val installedVersion = remember(installStatus) {
+                    ApkInstaller.installedVersion(context, "com.instagram.android")
+                }
+                if (installedVersion != null) {
+                    Prose("Instagram $installedVersion is installed. Installing again just " +
+                        "reinstalls it; you need this only on a phone without it, or to update.")
+                }
+
                 OutlinedTextField(
                     value = urlDraft,
                     onValueChange = { urlDraft = it },
@@ -381,45 +392,71 @@ fun RulesScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { scope.launch { AppGraph.repo.settings.setLimitedIgUrl(urlDraft) } }
                 )
-                PrimaryButton(
-                    text = if (installing) "Working…" else "Download and install",
-                    enabled = igUrl.isNotBlank() && !installing,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        scope.launch {
-                            if (!ApkInstaller.canInstall(context)) {
-                                context.startActivity(
-                                    ApkInstaller.unknownSourcesSettings(context)
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                )
-                                installStatus = "Allow Modes to install apps, then tap again."
-                                return@launch
-                            }
-                            installing = true
-                            installProgress = 0f
-                            installStatus = "Downloading…"
-                            val result = ApkInstaller.downloadAndInstall(context, igUrl) { p ->
-                                when (p) {
-                                    is ApkInstaller.Progress.Downloading -> installProgress = p.fraction
-                                    ApkInstaller.Progress.Installing -> installStatus = "Installing…"
+                if (staged == null) {
+                    // Step one: download. Kept apart from the install so the
+                    // system's install prompt can fire from a fresh tap.
+                    PrimaryButton(
+                        text = if (downloading) "Downloading…" else "Download",
+                        enabled = igUrl.isNotBlank() && !downloading,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            scope.launch {
+                                if (!ApkInstaller.canInstall(context)) {
+                                    context.startActivity(
+                                        ApkInstaller.unknownSourcesSettings(context)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                    installStatus = "Allow Modes to install apps, then tap Download."
+                                    return@launch
+                                }
+                                downloading = true
+                                downloadProgress = 0f
+                                installStatus = "Downloading…"
+                                val result = ApkInstaller.download(context, igUrl) { f ->
+                                    downloadProgress = f
+                                }
+                                downloading = false
+                                result.onSuccess {
+                                    staged = it
+                                    installStatus = "Downloaded ${it.size} file(s). Tap Install now."
+                                }.onFailure {
+                                    installStatus = "Download failed: ${it.message}"
                                 }
                             }
-                            installing = false
-                            installStatus = result.getOrElse { "Failed: ${it.message}" }
                         }
-                    }
-                )
-                if (installing) {
+                    )
+                } else {
+                    // Step two: install from the fresh tap, so Android lets the
+                    // confirm prompt through.
+                    PrimaryButton(
+                        text = "Install now",
+                        enabled = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            val apks = staged ?: return@PrimaryButton
+                            scope.launch {
+                                installStatus = "Opening the install prompt…"
+                                val result = ApkInstaller.install(context, apks)
+                                staged = null
+                                installStatus = result.fold(
+                                    onSuccess = { "Confirm the install when Android asks." },
+                                    onFailure = { "Install failed: ${it.message}" }
+                                )
+                            }
+                        }
+                    )
+                }
+                if (downloading) {
                     LinearProgressIndicator(
-                        progress = { installProgress },
+                        progress = { downloadProgress },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
                 if (installStatus.isNotBlank()) Prose(installStatus)
                 Prose(
-                    "Android shows its own install prompt; you tap to confirm. If the " +
-                        "phone already has Instagram, uninstall it first: a differently " +
-                        "signed build cannot replace it."
+                    "Android shows its own install prompt; you tap to confirm, and a " +
+                        "notification appears when it finishes. If the phone already has a " +
+                        "differently signed Instagram, uninstall it first."
                 )
             }
 
