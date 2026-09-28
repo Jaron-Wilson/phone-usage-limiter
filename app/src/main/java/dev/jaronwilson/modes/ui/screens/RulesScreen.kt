@@ -14,12 +14,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +62,8 @@ import dev.jaronwilson.modes.ui.Prose
 import dev.jaronwilson.modes.ui.SwitchRow
 import dev.jaronwilson.modes.ui.RowItem
 import dev.jaronwilson.modes.ui.ScreenScaffold
+import android.content.Intent
+import dev.jaronwilson.modes.remote.ApkInstaller
 import dev.jaronwilson.modes.remote.RemoteControlService
 import dev.jaronwilson.modes.ui.SectionHeader
 import androidx.compose.runtime.produceState
@@ -348,6 +352,74 @@ fun RulesScreen() {
                     "Installing an app still needs a tap from you: the assistant can " +
                         "open the Play Store page, and nothing more. Android does not " +
                         "allow silent installs, which is worth being glad about."
+                )
+            }
+
+            SectionHeader("Limited Instagram")
+            Panel {
+                Prose(
+                    "Fetches your own limited Instagram build from a link you " +
+                        "control, a private tailnet URL say, and installs it. Modes " +
+                        "carries no copy of its own; it only downloads from the link " +
+                        "you set. Works with a single .apk or a .zip of split APKs."
+                )
+                val igUrl by AppGraph.repo.settings.limitedIgUrl.collectAsState(initial = "")
+                var urlDraft by remember(igUrl) { mutableStateOf(igUrl) }
+                var installStatus by remember { mutableStateOf("") }
+                var installing by remember { mutableStateOf(false) }
+                var installProgress by remember { mutableFloatStateOf(0f) }
+                OutlinedTextField(
+                    value = urlDraft,
+                    onValueChange = { urlDraft = it },
+                    label = { Text("Download URL") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                PrimaryButton(
+                    text = "Save link",
+                    enabled = urlDraft.isNotBlank() && urlDraft != igUrl,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { scope.launch { AppGraph.repo.settings.setLimitedIgUrl(urlDraft) } }
+                )
+                PrimaryButton(
+                    text = if (installing) "Working…" else "Download and install",
+                    enabled = igUrl.isNotBlank() && !installing,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        scope.launch {
+                            if (!ApkInstaller.canInstall(context)) {
+                                context.startActivity(
+                                    ApkInstaller.unknownSourcesSettings(context)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                                installStatus = "Allow Modes to install apps, then tap again."
+                                return@launch
+                            }
+                            installing = true
+                            installProgress = 0f
+                            installStatus = "Downloading…"
+                            val result = ApkInstaller.downloadAndInstall(context, igUrl) { p ->
+                                when (p) {
+                                    is ApkInstaller.Progress.Downloading -> installProgress = p.fraction
+                                    ApkInstaller.Progress.Installing -> installStatus = "Installing…"
+                                }
+                            }
+                            installing = false
+                            installStatus = result.getOrElse { "Failed: ${it.message}" }
+                        }
+                    }
+                )
+                if (installing) {
+                    LinearProgressIndicator(
+                        progress = { installProgress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (installStatus.isNotBlank()) Prose(installStatus)
+                Prose(
+                    "Android shows its own install prompt; you tap to confirm. If the " +
+                        "phone already has Instagram, uninstall it first: a differently " +
+                        "signed build cannot replace it."
                 )
             }
 
