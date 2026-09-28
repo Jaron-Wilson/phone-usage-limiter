@@ -240,6 +240,9 @@ class RemoteControlService : Service() {
 
             "recent_messages", "reply_message" -> messageCommand(command, params)
 
+            "now_playing", "media_control", "get_volume", "set_volume", "set_mute" ->
+                mediaCommand(command, params)
+
             else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
         }
     }
@@ -277,6 +280,45 @@ class RemoteControlService : Service() {
             }
 
             else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
+        }
+    }
+
+    /**
+     * Music on the phone for Odysseus' music bar. Media sessions of other apps
+     * are only visible with notification access (the Modes listener).
+     */
+    private fun mediaCommand(command: String, params: JSONObject): String {
+        if (command in setOf("now_playing", "media_control") && NotificationGate.instance == null) {
+            return CommandProtocol.error(409, "Conflict",
+                "notification access is off; turn on Modes notification access so it can " +
+                    "see what is playing")
+        }
+        return try {
+            when (command) {
+                "now_playing" -> CommandProtocol.ok(MediaAccess.nowPlaying(this))
+                "media_control" -> {
+                    val action = params.optString("action").trim()
+                    if (action !in MediaMath.ACTIONS) {
+                        CommandProtocol.error(400, "Bad Request",
+                            "params.action must be one of " + MediaMath.ACTIONS.sorted().joinToString(", "))
+                    } else {
+                        CommandProtocol.ok(MediaAccess.control(this, action))
+                    }
+                }
+                "get_volume" -> CommandProtocol.ok(MediaAccess.volume(this))
+                "set_volume" -> {
+                    if (!params.has("percent")) {
+                        CommandProtocol.error(400, "Bad Request", "params.percent (0-100) is required")
+                    } else {
+                        CommandProtocol.ok(MediaAccess.setVolume(this, params.optInt("percent")))
+                    }
+                }
+                "set_mute" -> CommandProtocol.ok(MediaAccess.setMute(this, params.optBoolean("muted", true)))
+                else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
+            }
+        } catch (e: SecurityException) {
+            CommandProtocol.error(409, "Conflict",
+                "Android refused access to the media sessions: ${e.message}")
         }
     }
 

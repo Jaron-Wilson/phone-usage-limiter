@@ -24,6 +24,8 @@ object CommandProtocol {
         "tap", "type_text", "swipe", "scroll", "press_key",
         // Hands-free messaging, backed by the notification listener.
         "recent_messages", "reply_message",
+        // Music on the phone, for Odysseus' music bar (also via the listener).
+        "now_playing", "media_control", "get_volume", "set_volume", "set_mute",
     )
 
     data class Request(
