@@ -22,6 +22,8 @@ object CommandProtocol {
         // Screen control, backed by the accessibility guard.
         "read_screen", "screenshot", "foreground_app",
         "tap", "type_text", "swipe", "scroll", "press_key",
+        // Hands-free messaging, backed by the notification listener.
+        "recent_messages", "reply_message",
     )
 
     data class Request(
