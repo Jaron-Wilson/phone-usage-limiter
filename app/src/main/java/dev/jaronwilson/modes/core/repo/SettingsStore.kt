@@ -56,6 +56,7 @@ class SettingsStore(private val context: Context) {
         val EDGE_LEFT = stringPreferencesKey("edge_left")
         val EDGE_RIGHT = stringPreferencesKey("edge_right")
         val TAP_CARD_URL = stringPreferencesKey("tap_card_url")
+        val LIMITED_IG_URL = stringPreferencesKey("limited_ig_url")
         val DRAWER_FOLDERS = stringPreferencesKey("drawer_folders")
         val CALENDAR_PRIORITY = stringPreferencesKey("calendar_priority")
         val PLACE_MODE = stringPreferencesKey("place_mode")
@@ -220,6 +221,14 @@ class SettingsStore(private val context: Context) {
         it[K.TAP_CARD_URL] ?: DEFAULT_TAP_CARD
     }
     suspend fun setTapCardUrl(v: String) = edit { it[K.TAP_CARD_URL] = v }
+
+    /**
+     * Where to fetch your own limited Instagram build. Blank by default and kept
+     * only on the phone: it is your private URL (a tailnet address, say), not
+     * something to bake into the app. A single .apk or a .zip of split APKs.
+     */
+    val limitedIgUrl: Flow<String> = context.dataStore.data.map { it[K.LIMITED_IG_URL].orEmpty() }
+    suspend fun setLimitedIgUrl(v: String) = edit { it[K.LIMITED_IG_URL] = v.trim() }
 
     /**
      * Folders shown at the top of the app drawer, in order.

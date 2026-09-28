@@ -46,6 +46,7 @@
          that have been archived and so have no launcher entry of their own.
          The <queries> block below is not enough for that. This app is
          sideloaded, so Play's restrictions on this permission do not apply. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
@@ -252,6 +253,10 @@
                 android:value="Listens on the local network so the owner's own
                     self-hosted assistant can open apps on this phone." />
         </service>
+
+        <receiver
+            android:name=".remote.InstallReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".schedule.BootReceiver"
