@@ -254,9 +254,12 @@
                     self-hosted assistant can open apps on this phone." />
         </service>
 
-        <receiver
-            android:name=".remote.InstallReceiver"
-            android:exported="false" />
+        <activity
+            android:name=".remote.InstallLauncherActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <receiver
             android:name=".schedule.BootReceiver"

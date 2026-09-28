@@ -51,18 +51,32 @@ object ApkInstaller {
         url: String,
         onProgress: (Progress) -> Unit
     ): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            val work = File(context.cacheDir, "limited-install").apply {
-                deleteRecursively(); mkdirs()
-            }
-            val download = File(work, "payload")
-            fetch(url, download, onProgress)
+        // filesDir, not cacheDir: the download plus unpacked splits are hundreds
+        // of megabytes and the cache quota is tiny, so cacheDir gets purged out
+        // from under the install. Cleaned up by hand at the end instead.
+        val work = File(context.filesDir, "limited-install").apply {
+            deleteRecursively(); mkdirs()
+        }
+        try {
+            runCatching {
+                val download = File(work, "payload")
+                fetch(url, download, onProgress)
 
-            onProgress(Progress.Installing)
-            val apks = if (isZip(download)) unzipApks(download, work) else listOf(download)
-            require(apks.isNotEmpty()) { "no APK found in the download" }
-            install(context, apks)
-            "Downloaded ${apks.size} file(s); confirm the install when Android asks."
+                onProgress(Progress.Installing)
+                val apks = if (isZip(download)) {
+                    val extracted = unzipApks(download, work)
+                    download.delete()   // reclaim the zip before staging the session
+                    extracted
+                } else {
+                    listOf(download)
+                }
+                require(apks.isNotEmpty()) { "no APK found in the download" }
+                val count = apks.size
+                install(context, apks)
+                "Downloaded $count file(s); confirm the install when Android asks."
+            }
+        } finally {
+            work.deleteRecursively()
         }
     }
 
@@ -131,8 +145,12 @@ object ApkInstaller {
                     session.fsync(output)
                 }
             }
-            val intent = Intent(STATUS_ACTION).setPackage(context.packageName)
-            val pending = PendingIntent.getBroadcast(
+            // The status callback must be able to launch the system's confirm
+            // screen. A broadcast receiver cannot start an activity on Android
+            // 14+, so target a translucent trampoline activity instead.
+            val intent = Intent(context, InstallLauncherActivity::class.java)
+                .setAction(STATUS_ACTION)
+            val pending = PendingIntent.getActivity(
                 context, sessionId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
