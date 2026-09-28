@@ -15,6 +15,8 @@ import dev.jaronwilson.modes.ModesApp
 import dev.jaronwilson.modes.R
 import dev.jaronwilson.modes.guard.AppGuardService
 import dev.jaronwilson.modes.launcher.AppList
+import dev.jaronwilson.modes.notify.MessageAccess
+import dev.jaronwilson.modes.notify.NotificationGate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -235,6 +237,44 @@ class RemoteControlService : Service() {
             "foreground_app", "read_screen", "screenshot",
             "tap", "type_text", "swipe", "scroll", "press_key" ->
                 screenCommand(command, params)
+
+            "recent_messages", "reply_message" -> messageCommand(command, params)
+
+            else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
+        }
+    }
+
+    /**
+     * Reading and answering messages hands-free, through the notification
+     * listener. Needs notification access; without it there is nothing to read.
+     */
+    private fun messageCommand(command: String, params: JSONObject): String {
+        val gate = NotificationGate.instance
+            ?: return CommandProtocol.error(409, "Conflict",
+                "notification access is off; turn on Modes notification access to " +
+                    "read or answer messages")
+        return when (command) {
+            "recent_messages" -> {
+                val messages = MessageAccess.list(gate)
+                CommandProtocol.ok(JSONObject().put("ok", true)
+                    .put("count", messages.length()).put("messages", messages))
+            }
+
+            "reply_message" -> {
+                val key = params.optString("key").trim()
+                val text = params.optString("text")
+                when {
+                    key.isEmpty() ->
+                        CommandProtocol.error(400, "Bad Request", "params.key is required")
+                    text.isEmpty() ->
+                        CommandProtocol.error(400, "Bad Request", "params.text is required")
+                    MessageAccess.reply(gate, key, text) ->
+                        CommandProtocol.ok(JSONObject().put("ok", true).put("replied", key))
+                    else ->
+                        CommandProtocol.error(422, "Unprocessable Entity",
+                            "that message is no longer in the shade or offers no reply box")
+                }
+            }
 
             else -> CommandProtocol.error(500, "Internal Server Error", "unhandled: $command")
         }

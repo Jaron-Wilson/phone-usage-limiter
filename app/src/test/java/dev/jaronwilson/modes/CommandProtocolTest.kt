@@ -116,6 +116,11 @@ class CommandProtocolTest {
     fun `only known commands are advertised`() {
         assertTrue("open_app" in CommandProtocol.SUPPORTED)
         assertTrue("install_app" in CommandProtocol.SUPPORTED)
+        // Screen control and hands-free messaging.
+        assertTrue("read_screen" in CommandProtocol.SUPPORTED)
+        assertTrue("tap" in CommandProtocol.SUPPORTED)
+        assertTrue("recent_messages" in CommandProtocol.SUPPORTED)
+        assertTrue("reply_message" in CommandProtocol.SUPPORTED)
         // Nothing that would need silent install rights or credential entry.
         assertFalse("sign_in" in CommandProtocol.SUPPORTED)
         assertFalse("shell" in CommandProtocol.SUPPORTED)
