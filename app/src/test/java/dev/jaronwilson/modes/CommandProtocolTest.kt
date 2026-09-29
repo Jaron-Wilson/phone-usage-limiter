@@ -115,6 +115,9 @@ class CommandProtocolTest {
     @Test
     fun `only known commands are advertised`() {
         assertTrue("open_app" in CommandProtocol.SUPPORTED)
+        // Pairing from Odysseus opens "Pair new device" first.
+        assertTrue("bt_pairing" in CommandProtocol.SUPPORTED)
+        assertEquals("android.settings.BLUETOOTH_PAIRING_SETTINGS", CommandProtocol.BT_PAIRING_ACTIONS.first())
         assertTrue("install_app" in CommandProtocol.SUPPORTED)
         // Screen control and hands-free messaging.
         assertTrue("read_screen" in CommandProtocol.SUPPORTED)

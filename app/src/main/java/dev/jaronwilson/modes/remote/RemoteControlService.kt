@@ -204,6 +204,34 @@ class RemoteControlService : Service() {
                 }
             }
 
+            "bt_pairing" -> {
+                // Asked for: pairing from the website without digging through the
+                // phone's settings. The pairing screen keeps the phone visible
+                // while it is open; the user still confirms the code, as Android
+                // requires.
+                // The pairing screen needs "Nearby devices" (BLUETOOTH_SCAN); without
+                // it only the general Bluetooth screen opens, where the phone is not
+                // visible until "Pair new device" is tapped.
+                val canScan = checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                val opened = CommandProtocol.BT_PAIRING_ACTIONS.firstOrNull { action ->
+                    runCatching {
+                        startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }.isSuccess
+                }
+                if (opened == null) {
+                    CommandProtocol.error(500, "Internal Server Error",
+                        "could not open the Bluetooth settings on this phone")
+                } else {
+                    val pairing = opened == CommandProtocol.BT_PAIRING_ACTIONS.first()
+                    CommandProtocol.ok(JSONObject().put("ok", true).put("opened", opened)
+                        .put("visible", pairing)
+                        .put("note", if (pairing) "Keep this screen open until the computer pairs; tap Pair when asked."
+                            else "Tap \"Pair new device\" on the phone to make it visible" +
+                                (if (canScan) "." else " (allow Nearby devices for Modes to skip this step).")))
+                }
+            }
+
             "open_url" -> {
                 val url = params.optString("url").trim()
                 if (!url.startsWith("http://") && !url.startsWith("https://")) {

@@ -26,6 +26,15 @@ object CommandProtocol {
         "recent_messages", "reply_message",
         // Music on the phone, for Odysseus' music bar (also via the listener).
         "now_playing", "media_control", "get_volume", "set_volume", "set_mute",
+        // Bluetooth pairing from Odysseus: open "Pair new device", which makes
+        // the phone visible while it is open, so a computer can pair with it.
+        "bt_pairing",
+    )
+
+    /** Settings screens for bt_pairing, the pairing screen first. */
+    val BT_PAIRING_ACTIONS = listOf(
+        "android.settings.BLUETOOTH_PAIRING_SETTINGS",
+        "android.settings.BLUETOOTH_SETTINGS",
     )
 
     data class Request(
